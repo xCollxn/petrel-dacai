@@ -7,6 +7,8 @@
 <p align="center">
   <img src="previews/boot-screen.png" width="240" alt="Boot screen">
   &nbsp;&nbsp;
+  <img src="previews/print-preview.jpg" width="220" alt="Print preview with thumbnail">
+  &nbsp;&nbsp;
   <img src="previews/menu-icons.png" width="440" alt="List icons before and after">
 </p>
 
