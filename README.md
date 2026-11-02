@@ -28,9 +28,18 @@ This project contains everything that was needed to make Petrel work properly on
 | 📖 | What DACAI does differently – documented for the first time as far as we know | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
 | 🏠 | Optional Home Assistant automation: printer switched on → Klipper connects by itself | [`examples/home-assistant/`](examples/home-assistant/) |
 
-> **Status:** works on an Ender-3 Max Neo (Creality 4.2.2 board) with a Raspberry Pi 5,
-> Klipper 0.13, Moonraker 0.11, Petrel `9907edf` (v7.0.0-37). Other DACAI printers should
-> behave the same – reports welcome.
+## Tested with
+
+| Component | Version |
+|---|---|
+| **Petrel** | **v7.0.0-37, commit [`9907edf`](https://github.com/sezgynus/Petrel/commit/9907edfac4a6e50b4c71f25613d522ffec4a49ba)** (2026-10-30) |
+| Klipper / Moonraker / Mainsail | v0.13.0-745 / v0.11.0 / 2.19 |
+| Raspberry Pi | Pi 5, Debian 13 (Raspberry Pi OS), UART `/dev/ttyAMA0` |
+| Printer / screen | Ender-3 Max Neo (Creality 4.2.2), DACAI 4.3" knob screen |
+
+The patches are made for exactly this Petrel commit – the install steps check it out
+explicitly. Newer Petrel versions may need the patches to be rebased (see
+[Updating Petrel](#updating-petrel)). Other DACAI printers should behave the same – reports welcome.
 
 ---
 
