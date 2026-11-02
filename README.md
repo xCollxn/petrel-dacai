@@ -120,6 +120,15 @@ None of these is needed for the screen to work.
 Without the Home Assistant add-on you simply send `FIRMWARE_RESTART` from Mainsail/Fluidd (or
 from the screen's recovery page) after switching the printer on – exactly as before.
 
+## Which "firmware update" is which?
+
+| What | Covered here? |
+|---|---|
+| **Screen artwork** (icons, font, boot image) via microSD | ✅ [`docs/sd-update.md`](docs/sd-update.md) – incl. the way back to stock |
+| **Petrel** (the UI software on the Pi) | ✅ below |
+| **Klipper firmware on the printer mainboard** | ❌ not part of this project – your printer must already run Klipper ([Klipper docs](https://www.klipper3d.org/Installation.html)) |
+| **Screen controller kernel / bootloader** | ❌ never needed, do not flash it |
+
 ## Updating Petrel
 
 Petrel is developed very actively. Your install now lives on a local branch `dacai`, so

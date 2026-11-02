@@ -81,6 +81,17 @@ journalctl -u Petrel -f              # expect "LCD UART connected"
 
 **That's it – steps 1–7 are all you need.**
 
+## Two settings outside Petrel that are easy to miss
+
+* **Thumbnails need thumbnails in the G-code.** Enable them in your slicer, e.g. OrcaSlicer /
+  PrusaSlicer: *Printer settings → G-code thumbnails* `32x32/PNG, 300x300/PNG`; Cura: the
+  *Moonraker / Create Thumbnail* post-processing script. Moonraker extracts them automatically;
+  older files without thumbnails just show the file icon.
+* **Preheat buttons come from Mainsail.** Petrel shows Mainsail's preheat presets
+  (*Mainsail → Settings → Presets*, e.g. "PLA 215/55", "PETG 235/70"). Without presets Petrel
+  uses built-in defaults (PLA 200/60, ABS 210/100). Fluidd users can set the two values on the
+  screen under *Control → Temperature*.
+
 ## Recommended: maintenance reminders (no extra hardware)
 
 On the screen: *Maintenance → Care schedule → Add reminder*. Choose *Sampled printing hours*

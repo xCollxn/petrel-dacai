@@ -66,6 +66,17 @@ Ausführlich: [`docs/install.md`](docs/install.md) · Verkabelung: [`docs/wiring
 6. SD-Ordner bauen (`tools/make_sd_package.py`) und aufspielen: [`docs/sd-update.md`](docs/sd-update.md).
 7. Petrel neu starten – fertig.
 
+## Welches „Firmware-Update“ ist was?
+
+| Was | Hier erklärt? |
+|---|---|
+| **Display-Grafik** (Icons, Schrift, Startbild) per microSD | ✅ [`docs/sd-update.md`](docs/sd-update.md) – inkl. Rückweg zum Original |
+| **Petrel** (die Oberfläche auf dem Pi) | ✅ [README.md → Updating Petrel](README.md#updating-petrel) |
+| **Klipper-Firmware auf dem Drucker-Mainboard** | ❌ nicht Teil dieses Projekts – der Drucker muss schon mit Klipper laufen |
+| **Betriebssystem/Bootloader des Display-Controllers** | ❌ nie nötig, nicht flashen |
+
+**Leicht zu übersehen:** Vorschaubilder brauchen Thumbnails im G-Code (im Slicer einschalten, z. B. OrcaSlicer `32x32/PNG, 300x300/PNG`), und die Vorheiz-Knöpfe kommen aus den Mainsail-Presets. Details in [`docs/install.md`](docs/install.md).
+
 ## ★ Optionale Add-ons
 
 Für die Grundfunktion brauchst du nur Pi, Display, Kabel und eine SD-Karte. Alles mit ★ ist Zusatz:
