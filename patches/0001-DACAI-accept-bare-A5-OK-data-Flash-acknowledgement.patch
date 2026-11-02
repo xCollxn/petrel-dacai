@@ -1,0 +1,43 @@
+From ab24a1cd15d5f7fa82062d7577679876c7113bce Mon Sep 17 00:00:00 2001
+From: petrel-dacai <petrel-dacai@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 17:47:34 +0100
+Subject: [PATCH 1/6] DACAI: accept bare A5 OK data-Flash acknowledgement
+
+---
+ dwin_protocol.py | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/dwin_protocol.py b/dwin_protocol.py
+index d8ce8c2..fc798f3 100644
+--- a/dwin_protocol.py
++++ b/dwin_protocol.py
+@@ -6,6 +6,7 @@ inside a payload: memory replies and auxiliary uploads carry explicit lengths.
+ 
+ HEADER = b'\xaa'
+ TAIL = b'\xcc\x33\xc3\x3c'
++BARE_FLASH_ACK = b'\xa5OK'
+ MAX_DATA_LENGTH = 248
+ FIXED_RX_PAYLOAD = {0x00: 2, 0x31: 3, 0x33: 2, 0x34: 2, 0xff: 1}
+ 
+@@ -30,7 +31,18 @@ def take_response(buffer):
+     """
+     while True:
+         start = buffer.find(HEADER)
++        # Some Creality panels (e.g. Ender 3 Max Neo) acknowledge data-Flash
++        # writes with a bare A5 'OK' instead of a framed 0x31 reply.
++        bare = buffer.find(BARE_FLASH_ACK)
++        if bare >= 0 and (start < 0 or bare < start):
++            del buffer[:bare + len(BARE_FLASH_ACK)]
++            return 0x31, BARE_FLASH_ACK
+         if start < 0:
++            # Keep a possibly incomplete bare ACK prefix for the next read.
++            for keep in (2, 1):
++                if bytes(buffer[-keep:]) == BARE_FLASH_ACK[:keep]:
++                    del buffer[:-keep]
++                    return None
+             buffer.clear()
+             return None
+         if start:
+-- 
+2.47.3
+

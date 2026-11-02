@@ -1,0 +1,118 @@
+# Petrel for DACAI screens
+
+**Bring the stock Creality knob screen back to life on Klipper – even if it is a DACAI panel.**
+
+[Deutsch](README.de.md) · [Guide for AI assistants](AGENTS.md) · [Protocol notes](docs/dacai-protocol.md)
+
+<p align="center">
+  <img src="previews/boot-screen.png" width="240" alt="Boot screen">
+  &nbsp;&nbsp;
+  <img src="previews/menu-icons.png" width="440" alt="List icons before and after">
+</p>
+
+Many Creality printers (Ender-3 V2 Neo, Ender-3 Max Neo, some Ender-3 V2 / S1 batches) ship
+with a **DACAI** screen instead of the original **DWIN T5UIC1**. It looks identical and
+speaks *most* of the DWIN protocol – but not all of it. When you move such a printer to
+Klipper and try a DWIN screen UI like [Petrel](https://github.com/sezgynus/Petrel), you get
+missing icons, Chinese text snippets, a corrupted boot logo, or a screen that never connects.
+
+This project contains everything that was needed to make Petrel work properly on a DACAI panel:
+
+| | What | Where |
+|---|---|---|
+| 🔧 | 6 small patches for Petrel (each one switchable in `Petrel.env`) | [`patches/`](patches/) |
+| 🖼️ | A ready-made microSD overlay: 189 icons (74 redrawn in a filled colour style + 3 new), a neutral boot image, a crisp monospace font | [`sd-overlay/`](sd-overlay/) |
+| 🧰 | Tools: detect DWIN vs. DACAI, build icon libraries (ZICO), build fonts, render boot images, assemble the SD folder | [`tools/`](tools/) |
+| 📖 | What DACAI does differently – documented for the first time as far as we know | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
+| 🏠 | Optional Home Assistant automation: printer switched on → Klipper connects by itself | [`examples/home-assistant/`](examples/home-assistant/) |
+
+> **Status:** works on an Ender-3 Max Neo (Creality 4.2.2 board) with a Raspberry Pi 5,
+> Klipper 0.13, Moonraker 0.11, Petrel `9907edf` (v7.0.0-37). Other DACAI printers should
+> behave the same – reports welcome.
+
+---
+
+## ⚠️ Read this first
+
+* **Never flash a `DWIN_SET` folder onto a DACAI screen.** DACAI uses a folder called
+  `private` instead. DWIN files can leave the panel unusable.
+* **Do not start unpatched Petrel on a DACAI screen.** On its first start Petrel uploads
+  artwork over the UART. DACAI half-accepts those writes and your boot logo gets corrupted
+  (fixable by an SD update, but annoying). Follow the order below.
+* You work on mains-powered hardware. Power the screen and the Pi off before rewiring.
+
+## What you get
+
+* Petrel's full UI on the stock knob screen: printing with **model thumbnails**, tune, prepare,
+  leveling (bed mesh, screw tilt, probe calibration), maintenance reminders, info.
+* Filled colour icons everywhere, a cleaner bold font (DejaVu Sans Mono), your own boot image.
+* Optional: screen goes **dark while the printer is switched off** and lights up when
+  Klipper is ready again; Home Assistant can send `FIRMWARE_RESTART` automatically when the
+  printer draws power.
+* Maintenance: **belt & roller check** for X/Y and **lead screw clean & lube** for Z, friendly
+  device names.
+
+## Hardware
+
+* Stock Creality knob screen with a **DACAI** controller (check with `tools/dacai_probe.py`)
+* Raspberry Pi (tested: Pi 5) running Klipper + Moonraker
+* 7 jumper wires (female–female) or the original ribbon cable plus adapters
+* microSD card (≤ 32 GB, FAT32) and a card reader
+* Pi 5 with an M.2 HAT: use a tall stacking header so the GPIO pins stick out
+
+## Installation (overview)
+
+Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`](docs/wiring.md).
+
+1. **Wire** the screen to the Pi (5 V, GND, UART TX/RX, encoder A/B/button) and enable the
+   UART (`dtparam=uart0=on` on a Pi 5, then reboot).
+2. **Probe** the screen: `python3 tools/dacai_probe.py` → must report *DACAI panel*.
+3. **Get Petrel and apply the patches** *before* installing it:
+   ```bash
+   git clone https://github.com/sezgynus/Petrel.git ~/Petrel
+   cd ~/Petrel
+   git checkout -b dacai 9907edfac4a6e50b4c71f25613d522ffec4a49ba
+   git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
+   ```
+4. **Create `~/.config/Petrel/Petrel.env`** from [`examples/Petrel.env`](examples/Petrel.env)
+   (this also makes the installer skip its configuration menu).
+5. **Install:** `cd ~/Petrel && bash install.sh` (needs sudo).
+6. **Build and flash the SD folder:** take the stock `private` folder of your screen firmware,
+   run `tools/make_sd_package.py`, copy `private` to the card, power-cycle the screen with the
+   card inserted. See [`docs/sd-update.md`](docs/sd-update.md).
+7. Restart Petrel and enjoy.
+
+## The patches
+
+| # | Switch in `Petrel.env` | What it does |
+|---|---|---|
+| 0001 | – (always active) | Accepts DACAI's unframed `A5 4F 4B` data-flash acknowledgement |
+| 0002 | `PETREL_LCD_SD_ASSETS=1` | Never uploads boot image / icons / artwork over UART – they come from the SD card |
+| 0003 | `PETREL_RECT_THUMBNAILS=1` | DACAI cannot show JPEGs from SRAM (`0x24`); thumbnails are drawn from filled rectangles instead (≈1.5 s for 128×128) |
+| 0004 | `PETREL_HIDE_QR=1` | Hides the project QR code on the Info page (it is cut off on DACAI) |
+| 0005 | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while Klipper reports the printer board unreachable; the knob wakes it for 10 s |
+| 0006 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
+
+`patches/petrel-dacai-all.patch` contains all six as one diff.
+
+## Updating Petrel
+
+Petrel is developed very actively. Your install now lives on a local branch `dacai`, so
+Moonraker's update manager will not overwrite it by accident. To move to a newer Petrel, rebase
+the branch (`git fetch && git rebase origin/master`) and fix conflicts if any – or simply stay
+on the tested commit. Icons, font and boot image live inside the screen and survive updates.
+
+## Credits & licenses
+
+* **[Petrel](https://github.com/sezgynus/Petrel)** by sezgynus – GPL-3.0. The patches in this
+  repository modify Petrel and are therefore GPL-3.0 as well. Icon IDs 0–185 that were not
+  redrawn are Petrel's artwork.
+* **DejaVu fonts** – free license, see [`LICENSES/DejaVu.txt`](LICENSES/DejaVu.txt). The SD
+  font is a modified DejaVu Sans Mono Bold.
+* The DACAI `private` folder layout and stock files are Creality's. They are **not included**;
+  use the files of your own screen firmware. The community collection in
+  [mriscoc/Ender3V2S1](https://github.com/mriscoc/Ender3V2S1/tree/Ender3V2S1-Bugfix/display%20assets)
+  was a great help for understanding the layout.
+* Everything else (tools, redrawn icons, boot image, documentation): GPL-3.0, see [`LICENSE`](LICENSE).
+
+This project is not affiliated with Creality, DWIN, DACAI or the Petrel author.

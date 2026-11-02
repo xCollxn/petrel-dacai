@@ -1,0 +1,5 @@
+fonts/
+__pycache__/
+*.pyc
+/sd/
+/out/

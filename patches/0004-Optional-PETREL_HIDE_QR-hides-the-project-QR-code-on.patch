@@ -1,0 +1,63 @@
+From 1c538f37e6a92bbd4ca1ff06d4e09eee7cf20f5e Mon Sep 17 00:00:00 2001
+From: petrel-dacai <petrel-dacai@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 17:47:34 +0100
+Subject: [PATCH 4/6] Optional PETREL_HIDE_QR hides the project QR code on the
+ Info page
+
+---
+ info_qr.py   | 8 ++++++++
+ petrel_ui.py | 5 +++--
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/info_qr.py b/info_qr.py
+index 207c117..642e2f7 100644
+--- a/info_qr.py
++++ b/info_qr.py
+@@ -1,3 +1,4 @@
++import os
+ """Copy the visible project QR region from shared picture Area 1."""
+ from shared_artwork import PICTURE_ID
+ from shared_artwork_layout import QR_BOX
+@@ -5,8 +6,15 @@ from shared_artwork_layout import QR_BOX
+ PROJECT_URL = 'https://github.com/sezgynus/Petrel'
+ 
+ 
++def qr_hidden():
++    """QR code on the Info page switched off (PETREL_HIDE_QR=1)."""
++    return os.environ.get('PETREL_HIDE_QR') == '1'
++
++
+ def extra_info_rows():
+     """QR height plus two spacer rows before the update control."""
++    if qr_hidden():
++        return 1
+     return (QR_BOX[3] - QR_BOX[1] + 23) // 24 + 2
+ 
+ 
+diff --git a/petrel_ui.py b/petrel_ui.py
+index fbfaff6..d9a6f4e 100644
+--- a/petrel_ui.py
++++ b/petrel_ui.py
+@@ -16,7 +16,7 @@ import math
+ import textwrap
+ from collections.abc import Mapping
+ from software_update import SoftwareUpdate
+-from info_qr import PROJECT_URL, draw_project_qr, extra_info_rows
++from info_qr import PROJECT_URL, draw_project_qr, extra_info_rows, qr_hidden
+ from ui_nfc_share import NFCURIShareComponent
+ from shared_artwork import PICTURE_ID as SHARED_PICTURE_ID
+ from system_info import wifi_signal_text, wifi_signal_level
+@@ -3542,8 +3542,9 @@ class PetrelDisplay(RFIDViewMixin, RecoveryViewMixin, PrintFocusMixin, PowerShor
+             ('row', 'Klipper', self.pd.SHORT_BUILD_VERSION),
+             ('row', 'Moonraker', info.get('moonraker', 'Unavailable')),
+             ('row', 'Mainsail', info.get('mainsail', 'Unavailable')),
+-            ('qr', 'Scan for project info', PROJECT_URL),
+         ])
++        if not qr_hidden():
++            items.append(('qr', 'Scan for project info', PROJECT_URL))
+         items.append(('update', '', None))
+         return items
+ 
+-- 
+2.47.3
+

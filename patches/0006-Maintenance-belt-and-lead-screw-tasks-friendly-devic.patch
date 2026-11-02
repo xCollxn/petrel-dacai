@@ -1,0 +1,121 @@
+From 69809c66d6f0ab3a881d4e108652928cebcefb4b Mon Sep 17 00:00:00 2001
+From: petrel-dacai <petrel-dacai@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 17:47:34 +0100
+Subject: [PATCH 6/6] Maintenance: belt and lead-screw tasks, friendly device
+ names, axis badges
+
+---
+ maintenance_care.py       | 12 +++++++++++-
+ maintenance_experience.py |  9 +++++++++
+ maintenance_icons.py      | 13 +++++++++++++
+ 3 files changed, 33 insertions(+), 1 deletion(-)
+
+diff --git a/maintenance_care.py b/maintenance_care.py
+index 2e2d2b7..bb265e2 100644
+--- a/maintenance_care.py
++++ b/maintenance_care.py
+@@ -4,6 +4,8 @@ from collections.abc import Mapping
+ MAX_CARE_DEVICES = 256
+ TASKS = {
+     'mechanical':'Mechanical maintenance',
++    'belt':'Belt & roller check',
++    'lead_screw':'Lead screw clean & lube',
+     'filament_feed':'Filament feed maintenance',
+     'nozzle':'Nozzle maintenance',
+     'heating':'Heating system maintenance',
+@@ -53,6 +55,10 @@ def family(device):
+ 
+ def tasks(device):
+     kind=family(device)
++    if device in ('stepper_x','stepper_y'):
++        return ('belt','mechanical')
++    if device=='stepper_z':
++        return ('lead_screw','mechanical')
+     return ('filament_feed','nozzle','heating') if kind=='extruder' else (kind,)
+ 
+ 
+@@ -93,6 +99,8 @@ def inventory(objects,settings,existing=()):
+ # overwrite an existing service policy or its counter baseline.
+ REMINDER_DEFAULTS = {
+     'xy_axis': (90, 200, None, 30000, None),
++    'belt': (90, 100, None, None, None),
++    'lead_screw': (180, 200, None, None, None),
+     'z_axis': (180, 500, None, 10, None),
+     'mechanical': (180, 300, None, None, None),
+     'endstop': (180, 500, None, None, 500),
+@@ -131,7 +139,9 @@ def reminder_default(device, task, basis):
+     """
+     if not isinstance(device, str) or basis not in REMINDER_BASIS_INDEX:
+         raise ValueError('invalid_reminder_default')
+-    if device in ('stepper_x', 'stepper_y', 'axis_x', 'axis_y'):
++    if task in ('belt', 'lead_screw'):
++        profile = task
++    elif device in ('stepper_x', 'stepper_y', 'axis_x', 'axis_y'):
+         profile = 'xy_axis'
+     elif device in ('stepper_z', 'axis_z'):
+         profile = 'z_axis'
+diff --git a/maintenance_experience.py b/maintenance_experience.py
+index 2790ad7..1d6904d 100644
+--- a/maintenance_experience.py
++++ b/maintenance_experience.py
+@@ -64,6 +64,15 @@ def device_name(name):
+            'axis_x':'X travel','axis_y':'Y travel','axis_z':'Z travel'}
+     if name in known:
+         return known[name]
++    friendly={'mcu':'Mainboard','probe':'BLTouch probe','bltouch':'BLTouch probe',
++              'temperature_sensor mcu':'Mainboard temperature',
++              'temperature_sensor raspberry_pi':'Pi temperature'}
++    if name in friendly:
++        return friendly[name]
++    if name.startswith('temperature_host '):
++        return 'Raspberry Pi'
++    if name.startswith(('filament_switch_sensor ','filament_motion_sensor ')):
++        return 'Filament sensor'
+     if name.startswith('endstop '):
+         return device_name(name[8:])+' endstop'
+     chip,separator,stepper=name.partition(' ')
+diff --git a/maintenance_icons.py b/maintenance_icons.py
+index 53c2b94..b8e172a 100644
+--- a/maintenance_icons.py
++++ b/maintenance_icons.py
+@@ -18,6 +18,8 @@ def device_icon(device):
+     if device.startswith('extruder'): return 9
+     if device=='heater_bed': return 10
+     if device.startswith('heater_'): return 26
++    axis_badges={'stepper_x':21,'axis_x':21,'stepper_y':22,'axis_y':22,'stepper_z':23,'axis_z':23}
++    if device in axis_badges: return axis_badges[device]
+     if device.startswith(('stepper_','axis_','manual_stepper ')): return 17
+     if device.startswith('endstop '): return 19
+     if device.startswith('tmc'): return ICON_MCU
+@@ -26,6 +28,10 @@ def device_icon(device):
+     if 'buzzer' in device: return ICON_BUZZER
+     if 'probe' in device: return ICON_PROBE_CALIBRATION
+     if device.startswith('mcu'): return ICON_MCU
++    if device.startswith('filament_'): return 188
++    if device.startswith('temperature_host ') or device.endswith(' raspberry_pi'): return ICON_HOST
++    if device=='temperature_sensor mcu': return ICON_MCU
++    if device.startswith(('temperature_sensor ','temperature_')): return 26
+     return None
+ 
+ 
+@@ -56,10 +62,17 @@ def icon_for(choice):
+         finding=value[0] if isinstance(value,tuple) else value
+         features=getattr(finding,'evidence_features',())
+         return feature_icon(features[0],finding.device) if features else device_icon(finding.device)
++    if action=='service_kind' and isinstance(value,tuple) and len(value)>1:
++        kind_icons={'belt':186,'lead_screw':187,'mechanical':ICON_SCREW_ADJUST,
++                    'nozzle':24,'filament_feed':24,'heating':26,'fan':30,'sensor':19,
++                    'electronics':ICON_MCU}
++        if value[1] in kind_icons: return kind_icons[value[1]]
+     if action in ('service','service_add','service_basis','service_kind'): return ICON_MAINTENANCE_CARE
+     if action=='service_device': return device_icon(value)
+     if action=='service_task':
+         policy=value[0]
++        if policy.task_id=='belt': return 186
++        if policy.task_id=='lead_screw': return 187
+         return ICON_SCREW_ADJUST if policy.task_id in ('lubricate','mechanical') else 24 if policy.task_id in ('nozzle_inspect','nozzle','filament_feed') else ICON_MAINTENANCE_CARE
+     if action in ('history','load_history','history_read'): return 15
+     if action=='historical_result': return feature_icon(value.get('feature',''),value.get('device'))
+-- 
+2.47.3
+
