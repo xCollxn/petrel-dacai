@@ -43,22 +43,34 @@ This project contains everything that was needed to make Petrel work properly on
 
 ## What you get
 
+Everything below works with **just a Pi, the screen and some wires** – no extra hardware,
+no Home Assistant.
+
 * Petrel's full UI on the stock knob screen: printing with **model thumbnails**, tune, prepare,
   leveling (bed mesh, screw tilt, probe calibration), maintenance reminders, info.
-* Filled colour icons everywhere, a cleaner bold font (DejaVu Sans Mono), your own boot image.
-* Optional: screen goes **dark while the printer is switched off** and lights up when
-  Klipper is ready again; Home Assistant can send `FIRMWARE_RESTART` automatically when the
-  printer draws power.
+* Filled colour icons everywhere, a cleaner bold font (DejaVu Sans Mono), a neutral boot image.
+* Screen goes **dark while the printer is switched off** and lights up again when Klipper is
+  ready (detected from Klipper itself, no power meter needed).
 * Maintenance: **belt & roller check** for X/Y and **lead screw clean & lube** for Z, friendly
   device names.
 
+Things marked **★** are optional add-ons – skip them if you do not have the extra hardware.
+See [Optional add-ons](#-optional-add-ons).
+
 ## Hardware
 
+**Required**
+
 * Stock Creality knob screen with a **DACAI** controller (check with `tools/dacai_probe.py`)
-* Raspberry Pi (tested: Pi 5) running Klipper + Moonraker
+* Raspberry Pi running Klipper + Moonraker (tested: Pi 5; Pi 3/4 should work the same way)
 * 7 jumper wires (female–female) or the original ribbon cable plus adapters
 * microSD card (≤ 32 GB, FAT32) and a card reader
-* Pi 5 with an M.2 HAT: use a tall stacking header so the GPIO pins stick out
+* a multimeter for one quick voltage check
+
+**Only in special cases**
+
+* Pi 5 with an M.2 HAT: a tall stacking header so the GPIO pins stick out
+* ★ Home Assistant + a power-measuring smart plug: only for the autostart add-on
 
 ## Installation (overview)
 
@@ -94,6 +106,19 @@ Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`]
 | 0006 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
 
 `patches/petrel-dacai-all.patch` contains all six as one diff.
+
+## ★ Optional add-ons
+
+None of these is needed for the screen to work.
+
+| ★ Add-on | You need | What it does |
+|---|---|---|
+| **Autostart via Home Assistant** | Home Assistant, the Moonraker integration and a smart plug that **measures** the printer's power | When you switch the printer on, Klipper normally stays in `Lost communication with MCU` until someone sends `FIRMWARE_RESTART`. The automation sends it as soon as the printer draws power – switch on, wait ~20 s, ready. → [`examples/home-assistant/`](examples/home-assistant/) |
+| **Own boot image** | nothing extra | `tools/make_boot.py --title "My Printer" --info "220 × 220 × 250 mm" my_boot.jpg`, then rebuild the SD folder with `--boot my_boot.jpg` |
+| **Own icons / font** | Python with Pillow (+ fonttools for the font) | Edit `tools/make_icons.py` or `tools/build_font.py` and rebuild – see [AGENTS.md](AGENTS.md#practical-notes-for-agents) |
+
+Without the Home Assistant add-on you simply send `FIRMWARE_RESTART` from Mainsail/Fluidd (or
+from the screen's recovery page) after switching the printer on – exactly as before.
 
 ## Updating Petrel
 

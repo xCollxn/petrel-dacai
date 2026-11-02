@@ -79,10 +79,19 @@ journalctl -u Petrel -f              # expect "LCD UART connected"
 * A warning about the buzzer GPIO is expected when GPIO19 is used for the encoder.
 * `Cannot refresh Mainsail presets: 404` just means you have no Mainsail preheat presets yet.
 
-## Optional extras
+**That's it – steps 1–7 are all you need.**
 
-* Home Assistant autostart: [examples/home-assistant](../examples/home-assistant/)
-* Own boot image: `tools/make_boot.py --title "My Printer" --info "300 × 300 × 320 mm" out.jpg`,
-  then rebuild the SD folder with `--boot out.jpg`.
-* Maintenance reminders on the screen: *Maintenance → Care schedule → Add reminder*. Choose
-  *Sampled printing hours* (counts real printing time only) or *Extruded filament (metres)*.
+## Recommended: maintenance reminders (no extra hardware)
+
+On the screen: *Maintenance → Care schedule → Add reminder*. Choose *Sampled printing hours*
+(counts real printing time only, not screen-on time) or *Extruded filament (metres)*.
+Starting points for PLA/PETG: X/Y *Belt & roller check* 100 h, Z *Lead screw clean & lube*
+200 h, hotend *Nozzle maintenance* 1000 m (≈ 3 kg; much less for abrasive filament).
+
+## ★ Optional add-ons (skip if you do not have the hardware)
+
+* ★ **Home Assistant autostart** – needs Home Assistant, the Moonraker integration and a
+  power-measuring smart plug: [examples/home-assistant](../examples/home-assistant/).
+  Without it: send `FIRMWARE_RESTART` in Mainsail/Fluidd after switching the printer on.
+* ★ **Own boot image** – `tools/make_boot.py --title "My Printer" --info "220 × 220 × 250 mm" out.jpg`
+  (needs the DejaVu fonts: `tools/fetch_dejavu.sh`), then rebuild the SD folder with `--boot out.jpg`.

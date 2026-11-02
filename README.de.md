@@ -43,8 +43,9 @@ Hier liegt alles, was nötig war, damit Petrel auf einem DACAI-Display richtig l
 * Die komplette Petrel-Oberfläche am Original-Display: Drucken mit **Vorschaubild**, Tune,
   Prepare, Leveling (Bed Mesh, Schrauben, Z-Offset), Wartungserinnerungen, Info.
 * Gefüllte Farb-Icons, eine klarere fette Schrift (DejaVu Sans Mono), eigenes Startbild.
-* Optional: Display wird **dunkel, solange der Drucker aus ist**, und geht an, sobald Klipper
-  bereit ist; Home Assistant schickt beim Einschalten automatisch `FIRMWARE_RESTART`.
+* Display wird **dunkel, solange der Drucker aus ist**, und geht an, sobald Klipper bereit ist
+  (ohne Strommesser).
+* ★ Optional mit Home Assistant: beim Einschalten automatisch `FIRMWARE_RESTART`.
 * Wartung: **Riemen & Rollen** für X/Y und **Gewindestange reinigen & fetten** für Z.
 
 ## Installation (Kurzfassung)
@@ -64,6 +65,18 @@ Ausführlich: [`docs/install.md`](docs/install.md) · Verkabelung: [`docs/wiring
 5. `cd ~/Petrel && bash install.sh`
 6. SD-Ordner bauen (`tools/make_sd_package.py`) und aufspielen: [`docs/sd-update.md`](docs/sd-update.md).
 7. Petrel neu starten – fertig.
+
+## ★ Optionale Add-ons
+
+Für die Grundfunktion brauchst du nur Pi, Display, Kabel und eine SD-Karte. Alles mit ★ ist Zusatz:
+
+| ★ Add-on | Du brauchst | Was es macht |
+|---|---|---|
+| **Autostart über Home Assistant** | Home Assistant, die Moonraker-Integration und eine Steckdose, die den Strom **misst** | Drucker einschalten → Home Assistant schickt `FIRMWARE_RESTART` → nach ~20 s bereit. Ohne Add-on: `FIRMWARE_RESTART` wie gewohnt in Mainsail/Fluidd. → [`examples/home-assistant/`](examples/home-assistant/) |
+| **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann SD-Ordner mit `--boot mein_boot.jpg` neu bauen |
+| **Eigene Icons / Schrift** | Python mit Pillow (+ fonttools) | `tools/make_icons.py` bzw. `tools/build_font.py` anpassen und neu bauen |
+
+Das Dunkelschalten des Displays bei ausgeschaltetem Drucker braucht **keinen** Strommesser – Petrel erkennt das direkt an Klipper.
 
 ## Lizenzen
 

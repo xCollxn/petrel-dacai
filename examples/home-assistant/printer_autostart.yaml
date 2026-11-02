@@ -1,3 +1,5 @@
+# ★ OPTIONAL ADD-ON - not needed for the screen. See README.md in this folder.
+#
 # Home Assistant package: let Klipper connect by itself after the printer is switched on.
 #
 # Many printers are switched off at the mains after printing. Klipper then reports

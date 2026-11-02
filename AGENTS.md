@@ -22,6 +22,13 @@ Humans: [README.md](README.md) is for you; this file is fine to read too.
    Describe exactly what they should see.
 8. Keep a backup of anything you change (`printer.cfg`, `moonraker.conf`, HA files).
 
+## Scope: required vs. ★ optional
+
+The screen needs only the Pi, the wires and an SD card. Everything marked ★ (Home Assistant
+autostart, own boot image, own icons/font) is optional. **Ask the user whether they have
+Home Assistant and a power-measuring plug before suggesting the autostart add-on**; never make
+it a requirement. Without it, `FIRMWARE_RESTART` from Mainsail/Fluidd after power-on is fine.
+
 ## Procedure with checkpoints
 
 | Step | Action | Checkpoint |
