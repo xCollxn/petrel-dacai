@@ -1,5 +1,9 @@
 # Updating the screen via microSD
 
+> **Optional.** With Petrel's DACAI driver (`PETREL_DACAI=1`) the boot picture and all icons are
+> uploaded over the UART; no SD card is needed. Use the SD overlay only for the bold font or the
+> redrawn icons, or to return to stock.
+
 DACAI screens read their artwork from a folder called **`private`** on a microSD card in the
 slot on the back of the screen. (Genuine DWIN screens use `DWIN_SET` – never mix them up.)
 
@@ -37,7 +41,11 @@ What gets replaced: `icon/2.zico` (Petrel icon library), `image/0.jpg` (boot ima
 3. Stop Petrel.
 4. Unplug the screen's power (pulling the cable at the screen is the safest way).
 5. Insert the card into the screen, power it again, wait until the update has finished.
-6. Power off, remove the card, power on, start Petrel.
+6. Power off, remove the card, power on.
+7. The SD update removes the pictures Petrel uploaded. Upload them again, then start Petrel:
+   `~/petrel-env/bin/python ~/Petrel/tools/dacai_artwork.py --serial-port /dev/ttyAMA0`.
+   Petrel's sprite sheets take precedence over icons from the card; icons Petrel does not have
+   (e.g. 186–188 of patch 0006) still come from the card.
 
 ## Back to stock
 

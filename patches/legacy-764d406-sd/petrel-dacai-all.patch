@@ -1,0 +1,553 @@
+diff --git a/petrel/artwork/boot.py b/petrel/artwork/boot.py
+index bfa4fda..4f5b896 100644
+--- a/petrel/artwork/boot.py
++++ b/petrel/artwork/boot.py
+@@ -1,5 +1,6 @@
+ """Synchronize Petrel's boot JPEG directly into panel picture slot 0."""
+ import hashlib
++import os
+ from io import BytesIO
+ import logging
+ from pathlib import Path
+@@ -14,7 +15,9 @@ MAGIC = b'PETBOOT1'
+ _attempts = set()
+ 
+ 
+-def sync(lcd, source=SOURCE, *, force=False):
++def sync(lcd, source=None, *, force=False):
++    # PETREL_BOOT_ARTWORK: own boot picture instead of the bundled one.
++    source = source or os.environ.get('PETREL_BOOT_ARTWORK') or SOURCE
+     data = Path(source).read_bytes()
+     if len(data) > 32767:
+         raise ValueError('Boot JPEG must fit before SRAM address 0x7FFF')
+@@ -35,7 +38,8 @@ def sync(lcd, source=SOURCE, *, force=False):
+         if lcd.read_flash(ADDRESS, SIZE) != invalid:
+             raise RuntimeError('Boot artwork metadata invalidation failed')
+     logging.info('Uploading Petrel boot artwork to picture slot 0')
+-    lcd.write_sram(0, data)
++    from petrel.hardware.dwin.driver import DACAI, dacai_picture_payload
++    lcd.write_sram(0, dacai_picture_payload(data) if DACAI else data)
+     lcd.serial.flush()
+     time.sleep(.1)
+     _attempts.add(record)
+diff --git a/petrel/artwork/shared.py b/petrel/artwork/shared.py
+index d1f62eb..8220357 100644
+--- a/petrel/artwork/shared.py
++++ b/petrel/artwork/shared.py
+@@ -36,7 +36,8 @@ def sync(lcd, source=SOURCE, *, force=False):
+     logging.info('Uploading shared UI artwork to picture slot 1')
+     from petrel.artwork.resources import ICON_LIBRARY_ID
+     lcd.configure_animation(0, False, ICON_LIBRARY_ID, ICON_BOOT_FIRST, ICON_BOOT_LAST, 0, 320, 10)
+-    lcd.write_sram(0, data)
++    from petrel.hardware.dwin.driver import DACAI, dacai_picture_payload
++    lcd.write_sram(0, dacai_picture_payload(data) if DACAI else data)
+     lcd.serial.flush()
+     time.sleep(.1)
+     _attempts.add(record)
+diff --git a/petrel/features/display_settings/view.py b/petrel/features/display_settings/view.py
+index df2169c..8cc918f 100644
+--- a/petrel/features/display_settings/view.py
++++ b/petrel/features/display_settings/view.py
+@@ -1,4 +1,5 @@
+ """Existing display methods grouped by responsibility."""
++import os
+ from petrel.artwork.resources import ICON_BRIGHTNESS, ICON_BUZZER, ICON_CLICK_TONE, ICON_DIM_BRIGHTNESS, ICON_ENCODER_TONE, ICON_IDLE_DIM, ICON_VOLUME
+ from petrel.artwork.resources import ICON_NFC
+ import petrel.features.display_settings.settings as display_settings
+@@ -19,11 +20,61 @@ class DisplaySettingsViewMixin:
+             return True  # First interaction wakes without activating a hidden action.
+         return False
+ 
++    def _mcu_unreachable(self):
++        """Ask Klipper (via Moonraker) whether the printer board is switched off."""
++        now = time.monotonic()
++        if now < getattr(self, '_mcu_check_at', 0):
++            return getattr(self, '_mcu_off_cached', False)
++        self._mcu_check_at = now + 2.0
++        off = False
++        try:
++            import json, urllib.request
++            url = os.environ.get('MOONRAKER_URL', 'http://127.0.0.1:7125').rstrip('/')
++            with urllib.request.urlopen(url + '/printer/info', timeout=0.5) as resp:
++                info = json.load(resp)['result']
++            msg = str(info.get('state_message', '')).lower()
++            off = (info.get('state') in ('shutdown', 'error')
++                   and ('lost communication' in msg or 'unable to connect' in msg))
++        except Exception:
++            off = getattr(self, '_mcu_off_cached', False)
++        self._mcu_off_cached = off
++        return off
++
++    def _printer_off_backlight_tick(self, values):
++        """PETREL_DARK_WHEN_PRINTER_OFF: dark panel while the printer board (Klipper MCU) is off."""
++        if os.environ.get('PETREL_DARK_WHEN_PRINTER_OFF') != '1' or not values:
++            return
++        now = time.monotonic()
++        pd = getattr(self, 'pd', None)
++        ready = getattr(getattr(pd, 'state', None), 'ready', False)
++        printer_off = not ready and self._mcu_unreachable()
++        if printer_off:
++            since = getattr(self, '_printer_off_since', None)
++            if since is None:
++                self._printer_off_since = since = now
++            if (not getattr(self, '_display_dimmed', False) and now - since >= 2
++                    and now - self._display_last_activity >= 10
++                    and not getattr(self, '_display_edit', False)):
++                self.lcd.set_backlight(0)
++                self._display_dimmed = True
++                self._printer_dark = True
++        else:
++            self._printer_off_since = None
++            if ready:
++                self._mcu_off_cached = False
++            if getattr(self, '_printer_dark', False) and ready:
++                self._printer_dark = False
++                self._display_last_activity = now
++                if getattr(self, '_display_dimmed', False):
++                    self._display_dimmed = False
++                    self.lcd.set_backlight(display_settings.raw_brightness(values[0]))
++
+     def _display_idle_tick(self):
+         panel = getattr(getattr(self,'pd',None),'maintenance_panel',None)
+         if panel is not None and panel.pending:
+             return
+         values = getattr(self, '_display_values', None)
++        self._printer_off_backlight_tick(values)
+         if (values and values[1] and not getattr(self, '_display_dimmed', False)
+                 and time.monotonic() - self._display_last_activity >= values[1] * 60
+                 and not getattr(self, '_display_edit', False)):
+diff --git a/petrel/features/info/qr.py b/petrel/features/info/qr.py
+index 725780b..4464ead 100644
+--- a/petrel/features/info/qr.py
++++ b/petrel/features/info/qr.py
+@@ -1,3 +1,4 @@
++import os
+ """Copy the visible project QR region from shared picture Area 1."""
+ from petrel.artwork.shared import PICTURE_ID
+ from petrel.artwork.shared_layout import QR_BOX
+@@ -5,8 +6,15 @@ from petrel.artwork.shared_layout import QR_BOX
+ PROJECT_URL = 'https://github.com/sezgynus/Petrel'
+ 
+ 
++def qr_hidden():
++    """QR code on the Info page switched off (PETREL_HIDE_QR=1)."""
++    return os.environ.get('PETREL_HIDE_QR') == '1'
++
++
+ def extra_info_rows():
+     """QR height plus two spacer rows before the update control."""
++    if qr_hidden():
++        return 1
+     return (QR_BOX[3] - QR_BOX[1] + 23) // 24 + 2
+ 
+ 
+diff --git a/petrel/features/info/view.py b/petrel/features/info/view.py
+index 98e7957..0b57ed6 100644
+--- a/petrel/features/info/view.py
++++ b/petrel/features/info/view.py
+@@ -4,7 +4,7 @@ from petrel.artwork.resources import ICON_INFO_UPDATE_SELECTED, ICON_INFO_UPDATE
+ from petrel.ui.numbers import fixed, js_round
+ import textwrap
+ from petrel.features.software_update.updater import SoftwareUpdate
+-from petrel.features.info.qr import PROJECT_URL, draw_project_qr, extra_info_rows
++from petrel.features.info.qr import PROJECT_URL, draw_project_qr, extra_info_rows, qr_hidden
+ from petrel.features.nfc.share_view import NFCShareViewMixin
+ from petrel.artwork.shared import PICTURE_ID as SHARED_PICTURE_ID
+ from petrel.features.info.system import wifi_signal_text
+@@ -201,8 +201,9 @@ class InfoViewMixin(NFCShareViewMixin):
+             ('row', 'Klipper', self.pd.SHORT_BUILD_VERSION),
+             ('row', 'Moonraker', info.get('moonraker', 'Unavailable')),
+             ('row', 'Mainsail', info.get('mainsail', 'Unavailable')),
+-            ('qr', 'Scan for project info', PROJECT_URL),
+         ])
++        if not qr_hidden():
++            items.append(('qr', 'Scan for project info', PROJECT_URL))
+         items.append(('update', '', None))
+         return items
+ 
+diff --git a/petrel/features/maintenance/records/care.py b/petrel/features/maintenance/records/care.py
+index 2e2d2b7..bb265e2 100644
+--- a/petrel/features/maintenance/records/care.py
++++ b/petrel/features/maintenance/records/care.py
+@@ -4,6 +4,8 @@ from collections.abc import Mapping
+ MAX_CARE_DEVICES = 256
+ TASKS = {
+     'mechanical':'Mechanical maintenance',
++    'belt':'Belt & roller check',
++    'lead_screw':'Lead screw clean & lube',
+     'filament_feed':'Filament feed maintenance',
+     'nozzle':'Nozzle maintenance',
+     'heating':'Heating system maintenance',
+@@ -53,6 +55,10 @@ def family(device):
+ 
+ def tasks(device):
+     kind=family(device)
++    if device in ('stepper_x','stepper_y'):
++        return ('belt','mechanical')
++    if device=='stepper_z':
++        return ('lead_screw','mechanical')
+     return ('filament_feed','nozzle','heating') if kind=='extruder' else (kind,)
+ 
+ 
+@@ -93,6 +99,8 @@ def inventory(objects,settings,existing=()):
+ # overwrite an existing service policy or its counter baseline.
+ REMINDER_DEFAULTS = {
+     'xy_axis': (90, 200, None, 30000, None),
++    'belt': (90, 100, None, None, None),
++    'lead_screw': (180, 200, None, None, None),
+     'z_axis': (180, 500, None, 10, None),
+     'mechanical': (180, 300, None, None, None),
+     'endstop': (180, 500, None, None, 500),
+@@ -131,7 +139,9 @@ def reminder_default(device, task, basis):
+     """
+     if not isinstance(device, str) or basis not in REMINDER_BASIS_INDEX:
+         raise ValueError('invalid_reminder_default')
+-    if device in ('stepper_x', 'stepper_y', 'axis_x', 'axis_y'):
++    if task in ('belt', 'lead_screw'):
++        profile = task
++    elif device in ('stepper_x', 'stepper_y', 'axis_x', 'axis_y'):
+         profile = 'xy_axis'
+     elif device in ('stepper_z', 'axis_z'):
+         profile = 'z_axis'
+diff --git a/petrel/features/maintenance/ui/experience.py b/petrel/features/maintenance/ui/experience.py
+index 24ccac0..3d9ffcd 100644
+--- a/petrel/features/maintenance/ui/experience.py
++++ b/petrel/features/maintenance/ui/experience.py
+@@ -64,6 +64,15 @@ def device_name(name):
+            'axis_x':'X travel','axis_y':'Y travel','axis_z':'Z travel'}
+     if name in known:
+         return known[name]
++    friendly={'mcu':'Mainboard','probe':'BLTouch probe','bltouch':'BLTouch probe',
++              'temperature_sensor mcu':'Mainboard temperature',
++              'temperature_sensor raspberry_pi':'Pi temperature'}
++    if name in friendly:
++        return friendly[name]
++    if name.startswith('temperature_host '):
++        return 'Raspberry Pi'
++    if name.startswith(('filament_switch_sensor ','filament_motion_sensor ')):
++        return 'Filament sensor'
+     if name.startswith('endstop '):
+         return device_name(name[8:])+' endstop'
+     chip,separator,stepper=name.partition(' ')
+diff --git a/petrel/features/maintenance/ui/icons.py b/petrel/features/maintenance/ui/icons.py
+index a4d9f84..17a5aa3 100644
+--- a/petrel/features/maintenance/ui/icons.py
++++ b/petrel/features/maintenance/ui/icons.py
+@@ -18,6 +18,8 @@ def device_icon(device):
+     if device.startswith('extruder'): return 9
+     if device=='heater_bed': return 10
+     if device.startswith('heater_'): return 26
++    axis_badges={'stepper_x':21,'axis_x':21,'stepper_y':22,'axis_y':22,'stepper_z':23,'axis_z':23}
++    if device in axis_badges: return axis_badges[device]
+     if device.startswith(('stepper_','axis_','manual_stepper ')): return 17
+     if device.startswith('endstop '): return 19
+     if device.startswith('tmc'): return ICON_MCU
+@@ -26,6 +28,10 @@ def device_icon(device):
+     if 'buzzer' in device: return ICON_BUZZER
+     if 'probe' in device: return ICON_PROBE_CALIBRATION
+     if device.startswith('mcu'): return ICON_MCU
++    if device.startswith('filament_'): return 188
++    if device.startswith('temperature_host ') or device.endswith(' raspberry_pi'): return ICON_HOST
++    if device=='temperature_sensor mcu': return ICON_MCU
++    if device.startswith(('temperature_sensor ','temperature_')): return 26
+     return None
+ 
+ 
+@@ -56,10 +62,17 @@ def icon_for(choice):
+         finding=value[0] if isinstance(value,tuple) else value
+         features=getattr(finding,'evidence_features',())
+         return feature_icon(features[0],finding.device) if features else device_icon(finding.device)
++    if action=='service_kind' and isinstance(value,tuple) and len(value)>1:
++        kind_icons={'belt':186,'lead_screw':187,'mechanical':ICON_SCREW_ADJUST,
++                    'nozzle':24,'filament_feed':24,'heating':26,'fan':30,'sensor':19,
++                    'electronics':ICON_MCU}
++        if value[1] in kind_icons: return kind_icons[value[1]]
+     if action in ('service','service_add','service_basis','service_kind'): return ICON_MAINTENANCE_CARE
+     if action=='service_device': return device_icon(value)
+     if action=='service_task':
+         policy=value[0]
++        if policy.task_id=='belt': return 186
++        if policy.task_id=='lead_screw': return 187
+         return ICON_SCREW_ADJUST if policy.task_id in ('lubricate','mechanical') else 24 if policy.task_id in ('nozzle_inspect','nozzle','filament_feed') else ICON_MAINTENANCE_CARE
+     if action in ('history','load_history','history_read'): return 15
+     if action=='historical_result': return feature_icon(value.get('feature',''),value.get('device'))
+diff --git a/petrel/hardware/dwin/driver.py b/petrel/hardware/dwin/driver.py
+index 2757a06..d92ef69 100644
+--- a/petrel/hardware/dwin/driver.py
++++ b/petrel/hardware/dwin/driver.py
+@@ -8,6 +8,7 @@ renderers used by Petrel to preserve its current visual output.
+ 
+ import logging
+ import math
++import os
+ import struct
+ import time
+ import unicodedata
+@@ -23,6 +24,27 @@ import petrel.features.buzzer.control as buzzer_control
+ import serial
+ from petrel.ui.theme import BACKGROUND_COLOR
+ 
++# DACAI: thumbnails drawn from rectangles instead of SRAM JPEG (0x24).
++RECT_THUMBNAILS = os.environ.get('PETREL_RECT_THUMBNAILS') == '1'
++# DACAI: own SRAM JPEG opcode 0x70, inverted 0x27 bit 7, Picture Flash files need FF D9 at 32 KB.
++DACAI = os.environ.get('PETREL_DACAI') == '1'
++DACAI_PICTURES = DACAI and os.environ.get('PETREL_DACAI_PICTURE_UPLOAD') == '1'
++# DACAI: 0x38 re-clocks the host UART (UART2) until the panel loses power, e.g. 460800.
++DACAI_BAUD = int(os.environ.get('PETREL_DACAI_BAUD') or 0) if DACAI else 0
++DWIN_UART_CLOCK = 15667200
++
++
++def dacai_picture_payload(data, size=0x8000):
++    """DACAI writes the whole 32 KB SRAM as the picture file and rejects files that do
++    not end with FF D9: pad the JPEG with a COM segment to exactly 32 KB."""
++    data = bytes(data)
++    if data[:2] != b"\xff\xd8" or data[-2:] != b"\xff\xd9":
++        raise ValueError("picture must be a complete JPEG")
++    pad = size - len(data) - 4
++    if pad < 0:
++        raise ValueError("JPEG too large for one DACAI picture (max 32764 bytes)")
++    return data[:2] + b"\xff\xfe" + struct.pack(">H", pad + 2) + bytes(pad) + data[2:]
++
+ 
+ class T5UIC1ProtocolError(RuntimeError):
+     """Raised when a panel response is malformed or does not match a request."""
+@@ -180,10 +202,16 @@ class T5UIC1Display:
+                         break
+                 else:
+                     raise T5UIC1TimeoutError("DWIN handshake timed out")
++            if DACAI_BAUD and isinstance(self.serial, serial.Serial):
++                self._dacai_raise_baud(DACAI_BAUD)
+             # The panel CFG already selects portrait orientation. Preserve
+             # its power-on picture instead of reapplying direction via 0x34.
+-            from petrel.artwork.boot import sync
+-            sync(self)
++            # DACAI panels (e.g. Ender 3 Max Neo) load artwork from their
++            # microSD 'private' folder; UART Picture Flash writes corrupt them.
++            sd_assets = os.environ.get('PETREL_LCD_SD_ASSETS') == '1'
++            if not sd_assets or DACAI_PICTURES:
++                from petrel.artwork.boot import sync
++                sync(self)
+             # Present the complete boot frame before packing/checking icons.
+             # Existing panel icons can animate throughout an unchanged sync.
+             if startup_progress is not None:
+@@ -191,8 +219,13 @@ class T5UIC1Display:
+                 self.show_jpeg(0)
+                 startup_progress(self, 40)
+                 self.update()
+-            self._startup_sync_icons()
+-            self._startup_sync_shared_artwork()
++            if sd_assets:
++                self._assets_synced = True
++                if DACAI_PICTURES:
++                    self._startup_sync_shared_artwork()
++            else:
++                self._startup_sync_icons()
++                self._startup_sync_shared_artwork()
+             from petrel.artwork.resources import ICON_LIBRARY_ID
+             self._boot_animation_library = ICON_LIBRARY_ID
+             if startup_progress is not None:
+@@ -224,9 +257,41 @@ class T5UIC1Display:
+         from petrel.artwork.shared import sync
+         sync(self)
+ 
++    def _dacai_raise_baud(self, target):
++        divisor = max(1, round(DWIN_UART_CLOCK / target))
++        actual = round(DWIN_UART_CLOCK / divisor)
++        if self.serial.baudrate == actual:
++            return
++        with self._transaction_lock:
++            self._send(0x38, self._word(divisor))
++            self.serial.flush()
++        time.sleep(0.05)
++        self.serial.baudrate = actual
++        self._rx.clear()
++        for _ in range(3):
++            if self.handshake(0.5):
++                logging.info('DACAI host UART raised to %d baud', actual)
++                return
++        logging.warning('DACAI baud switch to %d failed; staying at 115200', actual)
++        with self._transaction_lock:
++            self._send(0x38, self._word(round(DWIN_UART_CLOCK / 115200)))
++            self.serial.flush()
++        time.sleep(0.05)
++        self.serial.baudrate = 115200
++        self._rx.clear()
++        if not self.handshake(1.0):
++            raise T5UIC1TimeoutError("DACAI baud fallback handshake timed out")
++
+     def close(self):
+         if not getattr(self, "_closed", False):
+             self._closed = True
++            if DACAI_BAUD and isinstance(self.serial, serial.Serial) and self.serial.baudrate != 115200:
++                # Leave the panel at its power-on speed so a restarted Petrel finds it at once.
++                try:
++                    self.serial.write(self.HEADER + bytes((0x38,)) + self._word(round(DWIN_UART_CLOCK / 115200)) + self.TAIL)
++                    self.serial.flush()
++                except Exception:
++                    pass
+             self.serial.close()
+             if getattr(self, '_flash_job', None) is not None or getattr(self, '_flash_queue', None):
+                 self._flash_abort(OSError('LCD disconnected during Flash transaction'))
+@@ -485,7 +550,11 @@ class T5UIC1Display:
+         return counts
+ 
+     def set_backlight(self, brightness):
+-        self._send(0x30, bytes((self._u8(brightness, "brightness"),)))
++        level = self._u8(brightness, "brightness")
++        if DACAI and level:
++            # DACAI firmware clamps 0x30 to 0..63 (63 = 100 %); keep 4 as darkest usable level.
++            level = max(4, (level * 63 + 127) // 255)
++        self._send(0x30, bytes((level,)))
+         self._backlight_raw = brightness
+ 
+     def set_orientation(self, direction, wait_ack=False, timeout=1.0):
+@@ -787,9 +856,60 @@ class T5UIC1Display:
+     def show_sram_jpeg(self, x, y, address=0, *, background=True, enhanced=False):
+         if not isinstance(address, int) or not 0 <= address < self.SRAM_SIZE:
+             raise ValueError("SRAM address outside 32KB range")
++        if RECT_THUMBNAILS:
++            self._draw_shadow_jpeg(x, y, address, background)
++            return
++        if DACAI:
++            # DACAI ignores 0x24 and draws SRAM JPEGs (opaque) with its own 0x70.
++            self._send(0x70, self._words(x, y, address))
++            return
+         mode = (bool(background) << 7) | (bool(enhanced) << 5)
+         self._send(0x24, self._words(x, y) + bytes((mode,)) + self._word(address))
+ 
++    def _draw_shadow_jpeg(self, x, y, address, background, tolerance=10, black=24):
++        shadow = getattr(self, '_sram_shadow', None)
++        if shadow is None:
++            return
++        end = shadow.find(b'\xff\xd9', address)
++        if end < 0:
++            return
++        try:
++            import io
++            from PIL import Image
++            img = Image.open(io.BytesIO(bytes(shadow[address:end + 2]))).convert('RGB')
++        except Exception:
++            logging.exception('Thumbnail decode failed')
++            return
++        w, h = img.size
++        px = img.load()
++        frames = bytearray()
++        for yy in range(h):
++            xx = 0
++            while xx < w:
++                c = px[xx, yy]
++                if not background and max(c) < black:
++                    xx += 1
++                    continue
++                start, acc = xx, [c]
++                xx += 1
++                while xx < w:
++                    c2 = px[xx, yy]
++                    if not background and max(c2) < black:
++                        break
++                    if max(abs(a - b) for a, b in zip(c2, acc[0])) > tolerance:
++                        break
++                    acc.append(c2)
++                    xx += 1
++                n = len(acc)
++                r, g, b = (sum(v[i] for v in acc) // n for i in range(3))
++                color = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
++                frames += (self.HEADER + b'\x05\x01' +
++                           struct.pack('>HHHHH', color, x + start, y + yy, x + xx - 1, y + yy) + self.TAIL)
++        with self._transaction_lock:
++            for i in range(0, len(frames), 2048):
++                self.serial.write(bytes(frames[i:i + 2048]))
++        self._needs_update = True
++
+     def cache_jpeg(self, jpeg_id, area=1):
+         if not isinstance(jpeg_id, int) or not 0 <= jpeg_id <= 15:
+             raise ValueError("JPEG ID must be 0..15")
+@@ -811,8 +931,13 @@ class T5UIC1Display:
+         if cache_id not in (0, 1):
+             raise ValueError("virtual display area must be 0 or 1")
+         mode = self._image_mode(cache_id, background, restore, enhanced)
++        if DACAI:
++            mode ^= 0x80  # DACAI: bit 7 set = black transparent, clear = opaque
+         self._send(0x27, bytes((mode,)) + self._words(x0, y0, x1, y1, x, y))
+ 
++    def prepare_picture(self, data):
++        return dacai_picture_payload(data) if DACAI else data
++
+     def configure_animation(self, animation_id, enabled, library_id,
+                             first_icon, last_icon, x, y, interval,
+                             *, restart_from_first=True):
+@@ -865,6 +990,13 @@ class T5UIC1Display:
+         if not 0 <= address < limit or address + len(data) > limit:
+             raise ValueError("memory write outside selected memory range")
+ 
++        if memory == self.MEMORY_SRAM and RECT_THUMBNAILS:
++            shadow = getattr(self, '_sram_shadow', None)
++            if shadow is None:
++                shadow = self._sram_shadow = bytearray(self.SRAM_SIZE)
++            shadow[address:address + len(data)] = data
++            return
++
+         with self._transaction_lock:
+             offset = 0
+             while offset < len(data):
+diff --git a/petrel/hardware/dwin/protocol.py b/petrel/hardware/dwin/protocol.py
+index d8ce8c2..fc798f3 100644
+--- a/petrel/hardware/dwin/protocol.py
++++ b/petrel/hardware/dwin/protocol.py
+@@ -6,6 +6,7 @@ inside a payload: memory replies and auxiliary uploads carry explicit lengths.
+ 
+ HEADER = b'\xaa'
+ TAIL = b'\xcc\x33\xc3\x3c'
++BARE_FLASH_ACK = b'\xa5OK'
+ MAX_DATA_LENGTH = 248
+ FIXED_RX_PAYLOAD = {0x00: 2, 0x31: 3, 0x33: 2, 0x34: 2, 0xff: 1}
+ 
+@@ -30,7 +31,18 @@ def take_response(buffer):
+     """
+     while True:
+         start = buffer.find(HEADER)
++        # Some Creality panels (e.g. Ender 3 Max Neo) acknowledge data-Flash
++        # writes with a bare A5 'OK' instead of a framed 0x31 reply.
++        bare = buffer.find(BARE_FLASH_ACK)
++        if bare >= 0 and (start < 0 or bare < start):
++            del buffer[:bare + len(BARE_FLASH_ACK)]
++            return 0x31, BARE_FLASH_ACK
+         if start < 0:
++            # Keep a possibly incomplete bare ACK prefix for the next read.
++            for keep in (2, 1):
++                if bytes(buffer[-keep:]) == BARE_FLASH_ACK[:keep]:
++                    del buffer[:-keep]
++                    return None
+             buffer.clear()
+             return None
+         if start:
+diff --git a/petrel/hardware/dwin/startup.py b/petrel/hardware/dwin/startup.py
+index fbfce06..18af921 100644
+--- a/petrel/hardware/dwin/startup.py
++++ b/petrel/hardware/dwin/startup.py
+@@ -1,4 +1,5 @@
+ """Nonblocking panel handshake; keep one UART open while waiting for power."""
++import os
+ import time
+ import serial
+ from petrel.hardware.dwin.transport import open_display_serial
+@@ -13,6 +14,9 @@ class PanelProbe:
+         self.received = bytearray()
+         self.next_send = 0
+         self.fast_until = 0
++        # DACAI keeps a raised host baud until power loss: probe both speeds alternately.
++        self.alt_baud = (int(os.environ.get('PETREL_DACAI_BAUD') or 0)
++                         if os.environ.get('PETREL_DACAI') == '1' and isinstance(self.serial, serial.Serial) else 0)
+ 
+     def accelerate(self):
+         self.fast_until = time.monotonic() + 10
+@@ -28,6 +32,9 @@ class PanelProbe:
+             self.received = self.received[-7:]
+         now = time.monotonic()
+         if now >= self.next_send:
++            if self.alt_baud:
++                self.serial.baudrate = self.alt_baud if self.serial.baudrate == 115200 else 115200
++                self.received.clear()
+             if self.serial.write(self.REQUEST) != len(self.REQUEST):
+                 raise OSError('Incomplete panel handshake write')
+             self.next_send = now + (.15 if now < self.fast_until else 5)

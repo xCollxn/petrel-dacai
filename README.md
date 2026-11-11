@@ -22,8 +22,8 @@ This project contains everything that was needed to make Petrel work properly on
 
 | | What | Where |
 |---|---|---|
-| 🔧 | 8 small patches for Petrel (each one switchable in `Petrel.env`) | [`patches/`](patches/) |
-| 🖼️ | A ready-made microSD overlay: 189 icons (74 redrawn in a filled colour style + 3 new), a neutral boot image, a crisp monospace font | [`sd-overlay/`](sd-overlay/) |
+| 🔧 | A `DacaiDriver` for Petrel (proposed upstream): artwork **and icons go over the UART – no microSD card needed** – plus 4 optional extras | [`patches/`](patches/) |
+| 🖼️ | ★ Optional microSD overlay: 189 icons (74 redrawn in a filled colour style + 3 new), a neutral boot image, a crisp monospace font | [`sd-overlay/`](sd-overlay/) |
 | 🧰 | Tools: detect DWIN vs. DACAI, build icon libraries (ZICO), build fonts, render boot images, assemble the SD folder | [`tools/`](tools/) |
 | 📖 | What DACAI does differently – documented for the first time as far as we know | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
 | 🏠 | Optional Home Assistant automation: printer switched on → Klipper connects by itself | [`examples/home-assistant/`](examples/home-assistant/) |
@@ -47,9 +47,9 @@ explicitly. Newer Petrel versions may need the patches to be rebased (see
 
 * **Never flash a `DWIN_SET` folder onto a DACAI screen.** DACAI uses a folder called
   `private` instead. DWIN files can leave the panel unusable.
-* **Do not start unpatched Petrel on a DACAI screen.** On its first start Petrel uploads
-  artwork over the UART. DACAI half-accepts those writes and your boot logo gets corrupted
-  (fixable by an SD update, but annoying). Follow the order below.
+* **Do not start unpatched Petrel on a DACAI screen.** On its first start plain Petrel uploads
+  a DWIN icon library over the UART, which DACAI stores as broken pictures (fixable with
+  `tools/dacai_artwork.py` once patched, but annoying). Follow the order below.
 * You work on mains-powered hardware. Power the screen and the Pi off before rewiring.
 
 ## What you get
@@ -59,7 +59,10 @@ no Home Assistant.
 
 * Petrel's full UI on the stock knob screen: printing with **model thumbnails**, tune, prepare,
   leveling (bed mesh, screw tilt, probe calibration), maintenance reminders, info.
-* Filled colour icons everywhere, a cleaner bold font (DejaVu Sans Mono), a neutral boot image.
+* **No microSD card:** boot picture, shared artwork and all icons are uploaded over the UART on
+  the first start (about 15 s), afterwards only changed pictures. Icon animations (boot progress,
+  fan) are driven by the Pi.
+* ★ With the SD overlay: filled colour icons and a cleaner bold font (DejaVu Sans Mono).
 * Screen goes **dark while the printer is switched off** and lights up again when Klipper is
   ready (detected from Klipper itself, no power meter needed).
 * Maintenance: **belt & roller check** for X/Y and **lead screw clean & lube** for Z, friendly
@@ -75,8 +78,8 @@ See [Optional add-ons](#-optional-add-ons).
 * Stock Creality knob screen with a **DACAI** controller (check with `tools/dacai_probe.py`)
 * Raspberry Pi running Klipper + Moonraker (tested: Pi 5; Pi 3/4 should work the same way)
 * 7 jumper wires (female–female) or the original ribbon cable plus adapters
-* microSD card (≤ 32 GB, FAT32) and a card reader
 * a multimeter for one quick voltage check
+* ★ microSD card (≤ 32 GB, FAT32) – only for the optional SD overlay (own font / icons)
 
 **Only in special cases**
 
@@ -98,27 +101,26 @@ Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`]
    git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
    ```
 4. **Create `~/.config/Petrel/Petrel.env`** from [`examples/Petrel.env`](examples/Petrel.env)
-   (this also makes the installer skip its configuration menu).
-5. **Install:** `cd ~/Petrel && bash install.sh` (needs sudo).
-6. **Build and flash the SD folder:** take the stock `private` folder of your screen firmware,
-   run `tools/make_sd_package.py`, copy `private` to the card, power-cycle the screen with the
-   card inserted. See [`docs/sd-update.md`](docs/sd-update.md).
-7. Restart Petrel and enjoy.
+   (this also makes the installer skip its configuration menu). It sets `PETREL_DACAI=1`.
+5. **Install:** `cd ~/Petrel && bash install.sh` (needs sudo). On the first start Petrel uploads
+   its artwork and icon sheets over the UART (about 15 s) – done.
+6. ★ Optional: own font / redrawn icons via the SD overlay, see [`docs/sd-update.md`](docs/sd-update.md).
 
 ## The patches
 
 | # | Switch in `Petrel.env` | What it does |
 |---|---|---|
-| 0001 | – (always active) | Accepts DACAI's unframed `A5 4F 4B` data-flash acknowledgement |
-| 0002 | `PETREL_LCD_SD_ASSETS=1` | Never uploads boot image / icons / artwork over UART – they come from the SD card |
-| 0003 | `PETREL_RECT_THUMBNAILS=1` | Fallback: thumbnails drawn from filled rectangles (≈1.5 s for 128×128). Not needed with 0007 |
-| 0004 | `PETREL_HIDE_QR=1` | Hides the project QR code on the Info page (it is cut off on DACAI) |
+| 0001 | – | Small extension points in Petrel's DWIN driver; no change for DWIN screens |
+| 0002 | `PETREL_DACAI=1`, `PETREL_DACAI_BAUD` | **`DacaiDriver`**: thumbnails with DACAI's `0x70`, `0x27` bit 7 fix, pictures padded to 32 KB, **icons as JPEG sprite sheets over UART** (pictures 16+, drawn with `0x25` + `0x27`), animations from the Pi, bare `A5 OK` flash ACK, brightness 0–63, faster host link via `0x38`; `tools/dacai_artwork.py` re-uploads after an SD update |
+| 0003 | – | `configure.sh` menu *Display panel* and Petrel's own `docs/dacai.md` (EN/TR) |
+| 0004 | `PETREL_HIDE_QR=1` | Hides the project QR code on the Info page |
 | 0005 | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while Klipper reports the printer board unreachable; the knob wakes it for 10 s |
 | 0006 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
-| 0007 | `PETREL_DACAI=1` (+ `PETREL_DACAI_PICTURE_UPLOAD=1`, `PETREL_BOOT_ARTWORK=…`) | Thumbnails with DACAI's own `0x70` (≈3× faster than rectangles), `0x27` bit 7 fix, and boot / shared pictures uploaded over UART (padded to 32 KB) – icons still come from the SD card |
-| 0008 | `PETREL_DACAI=1`, `PETREL_DACAI_BAUD=460800` | Brightness slider uses DACAI's real range (0–63), and the host link runs 4× faster (`0x38` re-clocks the panel UART; automatic fallback to 115200) |
+| 0007 | `PETREL_BOOT_ARTWORK=…` | Own boot picture, uploaded over UART |
 
-`patches/petrel-dacai-all.patch` contains all eight as one diff.
+0001–0003 are the part proposed to Petrel upstream. `patches/petrel-dacai-all.patch` contains
+all seven as one diff. The previous SD-based series is kept in
+[`patches/legacy-764d406-sd/`](patches/legacy-764d406-sd/).
 
 ## ★ Optional add-ons
 
@@ -127,8 +129,8 @@ None of these is needed for the screen to work.
 | ★ Add-on | You need | What it does |
 |---|---|---|
 | **Autostart via Home Assistant** | Home Assistant, the Moonraker integration and a smart plug that **measures** the printer's power | When you switch the printer on, Klipper normally stays in `Lost communication with MCU` until someone sends `FIRMWARE_RESTART`. The automation sends it as soon as the printer draws power – switch on, wait ~20 s, ready. → [`examples/home-assistant/`](examples/home-assistant/) |
-| **Own boot image** | nothing extra | `tools/make_boot.py --title "My Printer" --info "220 × 220 × 250 mm" my_boot.jpg`, then rebuild the SD folder with `--boot my_boot.jpg` |
-| **Own icons / font** | Python with Pillow (+ fonttools for the font) | Edit `tools/make_icons.py` or `tools/build_font.py` and rebuild – see [AGENTS.md](AGENTS.md#practical-notes-for-agents) |
+| **Own boot image** | nothing extra | `tools/make_boot.py --title "My Printer" --info "220 × 220 × 250 mm" my_boot.jpg`, then set `PETREL_BOOT_ARTWORK=/path/my_boot.jpg` (patch 0007) – uploaded over UART |
+| **Own font / redrawn icons** | microSD card, Python with Pillow (+ fonttools for the font) | SD overlay, see [`docs/sd-update.md`](docs/sd-update.md) and [AGENTS.md](AGENTS.md#practical-notes-for-agents) |
 
 Without the Home Assistant add-on you simply send `FIRMWARE_RESTART` from Mainsail/Fluidd (or
 from the screen's recovery page) after switching the printer on – exactly as before.
@@ -137,7 +139,8 @@ from the screen's recovery page) after switching the printer on – exactly as b
 
 | What | Covered here? |
 |---|---|
-| **Screen artwork** (icons, font, boot image) via microSD | ✅ [`docs/sd-update.md`](docs/sd-update.md) – incl. the way back to stock |
+| **Screen artwork** over UART (boot image, icons) | ✅ automatic with `PETREL_DACAI=1` |
+| ★ **Screen artwork** via microSD (font, redrawn icons) | ✅ [`docs/sd-update.md`](docs/sd-update.md) – incl. the way back to stock |
 | **Petrel** (the UI software on the Pi) | ✅ below |
 | **Klipper firmware on the printer mainboard** | ❌ not part of this project – your printer must already run Klipper ([Klipper docs](https://www.klipper3d.org/Installation.html)) |
 | **Screen controller kernel / bootloader** | ❌ never needed, do not flash it |
@@ -147,7 +150,9 @@ from the screen's recovery page) after switching the printer on – exactly as b
 Petrel is developed very actively. Your install now lives on a local branch `dacai`, so
 Moonraker's update manager will not overwrite it by accident. To move to a newer Petrel, rebase
 the branch (`git fetch && git rebase origin/master`) and fix conflicts if any – or simply stay
-on the tested commit. Icons, font and boot image live inside the screen and survive updates.
+on the tested commit. Petrel re-uploads only artwork that changed. After a screen **microSD**
+update run `tools/dacai_artwork.py` once (see Petrel's `docs/dacai.md`), because the SD update
+removes the uploaded pictures.
 
 ## Credits & licenses
 

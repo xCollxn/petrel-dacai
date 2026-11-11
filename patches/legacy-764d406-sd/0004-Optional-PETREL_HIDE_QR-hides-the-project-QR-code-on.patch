@@ -1,0 +1,63 @@
+From ca92aebb0f24c6831689ba89bac4207c7467cdee Mon Sep 17 00:00:00 2001
+From: petrel-dacai <petrel-dacai@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 17:47:34 +0100
+Subject: [PATCH 4/8] Optional PETREL_HIDE_QR hides the project QR code on the
+ Info page
+
+---
+ petrel/features/info/qr.py   | 8 ++++++++
+ petrel/features/info/view.py | 5 +++--
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/petrel/features/info/qr.py b/petrel/features/info/qr.py
+index 725780b..4464ead 100644
+--- a/petrel/features/info/qr.py
++++ b/petrel/features/info/qr.py
+@@ -1,3 +1,4 @@
++import os
+ """Copy the visible project QR region from shared picture Area 1."""
+ from petrel.artwork.shared import PICTURE_ID
+ from petrel.artwork.shared_layout import QR_BOX
+@@ -5,8 +6,15 @@ from petrel.artwork.shared_layout import QR_BOX
+ PROJECT_URL = 'https://github.com/sezgynus/Petrel'
+ 
+ 
++def qr_hidden():
++    """QR code on the Info page switched off (PETREL_HIDE_QR=1)."""
++    return os.environ.get('PETREL_HIDE_QR') == '1'
++
++
+ def extra_info_rows():
+     """QR height plus two spacer rows before the update control."""
++    if qr_hidden():
++        return 1
+     return (QR_BOX[3] - QR_BOX[1] + 23) // 24 + 2
+ 
+ 
+diff --git a/petrel/features/info/view.py b/petrel/features/info/view.py
+index 98e7957..0b57ed6 100644
+--- a/petrel/features/info/view.py
++++ b/petrel/features/info/view.py
+@@ -4,7 +4,7 @@ from petrel.artwork.resources import ICON_INFO_UPDATE_SELECTED, ICON_INFO_UPDATE
+ from petrel.ui.numbers import fixed, js_round
+ import textwrap
+ from petrel.features.software_update.updater import SoftwareUpdate
+-from petrel.features.info.qr import PROJECT_URL, draw_project_qr, extra_info_rows
++from petrel.features.info.qr import PROJECT_URL, draw_project_qr, extra_info_rows, qr_hidden
+ from petrel.features.nfc.share_view import NFCShareViewMixin
+ from petrel.artwork.shared import PICTURE_ID as SHARED_PICTURE_ID
+ from petrel.features.info.system import wifi_signal_text
+@@ -201,8 +201,9 @@ class InfoViewMixin(NFCShareViewMixin):
+             ('row', 'Klipper', self.pd.SHORT_BUILD_VERSION),
+             ('row', 'Moonraker', info.get('moonraker', 'Unavailable')),
+             ('row', 'Mainsail', info.get('mainsail', 'Unavailable')),
+-            ('qr', 'Scan for project info', PROJECT_URL),
+         ])
++        if not qr_hidden():
++            items.append(('qr', 'Scan for project info', PROJECT_URL))
+         items.append(('update', '', None))
+         return items
+ 
+-- 
+2.47.3
+

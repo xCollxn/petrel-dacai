@@ -35,7 +35,7 @@ git clone https://github.com/sezgynus/Petrel.git ~/Petrel
 cd ~/Petrel
 git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
 git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
-git log --oneline | head -7          # six "DACAI / Optional / Maintenance" commits on top
+git log --oneline | head -8          # seven commits on top (DWIN driver / DacaiDriver / configure.sh / Optional / Maintenance)
 git status --short                   # must be empty (the installer requires a clean tree)
 ```
 
@@ -48,7 +48,8 @@ nano ~/.config/Petrel/Petrel.env     # check port and encoder pins
 ```
 
 Because the file exists, `install.sh` keeps it and skips the interactive menu. The example
-disables Petrel's optional Klipper extras, so your `printer.cfg` is not touched.
+sets `PETREL_DACAI=1` (Petrel's DACAI driver) and disables Petrel's optional Klipper extras, so
+your `printer.cfg` is not touched.
 
 ## 5. Install
 
@@ -57,22 +58,19 @@ cd ~/Petrel && bash install.sh       # install.sh is not executable in the repo,
 ```
 
 It installs packages (sudo), creates `Petrel.service`, adds `[include Petrel.conf]` to
-`moonraker.conf` and restarts Moonraker. Petrel starts right away – with the patches, so the
-screen is safe.
+`moonraker.conf` and restarts Moonraker. Petrel starts right away and uploads the boot picture,
+shared artwork and six icon sprite sheets over the UART (about 15 s at 460800 baud). No SD card
+is needed.
 
-## 6. SD card
+## 6. ★ Optional: SD overlay
 
-Follow [sd-update.md](sd-update.md). Stop Petrel during the update:
-
-```bash
-sudo systemctl stop Petrel           # or without sudo: curl -X POST "http://localhost:7125/machine/services/stop?service=Petrel"
-```
+Only for the bold font or the redrawn icons: follow [sd-update.md](sd-update.md).
 
 ## 7. Check
 
 ```bash
 sudo systemctl start Petrel
-journalctl -u Petrel -f              # expect "LCD UART connected"
+journalctl -u Petrel -f              # expect "Sprite sheets: upload complete" (first start) and "LCD UART connected"
 ```
 
 * Wrong knob direction → swap the two numbers in `PETREL_ENCODER_PINS` and restart Petrel.

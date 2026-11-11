@@ -1,7 +1,7 @@
-From 77c360bcf5b04774c77d584c126b400cc94d0838 Mon Sep 17 00:00:00 2001
+From 97d512f67f911896277404dd335bc3cc1870a75a Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
-Subject: [PATCH 6/8] Maintenance: belt and lead-screw tasks, friendly device
+Subject: [PATCH 6/7] Maintenance: belt and lead-screw tasks, friendly device
  names, axis badges
 
 ---

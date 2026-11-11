@@ -57,7 +57,7 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    Limit: one picture ≤ 32 KB (480×272 baseline JPEG at ~80 % quality ≈ 12–25 KB).
    **Icon libraries cannot be written over UART** – the firmware only ever *reads*
    `3:/icon/<n>.zico`. Workaround that works: put the icons on a JPEG **sprite sheet**, upload it
-   like a picture, load it with `0x25 01 <id>` (wait ~0.5 s for the decode) and copy single icons
+   like a picture, load it with `0x25 01 <id>` and copy single icons
    with `0x26` (opaque) or `0x27` mode `0x81` (black transparent on DACAI). Tested with 32 of
    Petrel's own icons (`tools/panel-tests/sprite_test.py`, photo `previews/sd-free-icons-test.jpg`):
    a full screen of tiles and icons is drawn in < 1 s.
@@ -141,6 +141,32 @@ then       payloads: zlib-compressed RGB565 little-endian, row by row
 Icon IDs are free (Petrel uses library 2, IDs 0–188 here). Black `0x0000` is filtered as
 transparent when an icon is drawn without background. `tools/build_zico.py` writes and verifies
 the format.
+
+## Sprite sheets in practice (Petrel `DacaiDriver`)
+
+Measured on the reference panel with `tools/panel-tests/limits_test.py` and Petrel's driver:
+
+| Question | Result |
+|---|---|
+| Picture IDs above 15? | ✅ `0x33`/`0x25` work with IDs 16–23 (byte argument) |
+| Room for full 32 KB pictures | ✅ at least 8 extra pictures besides the stock ones |
+| Wait after `0x25` before copying? | **Not needed** – with 0 ms the right sheet was copied; the panel processes commands in order |
+| Petrel's icon library | 150 icons (all except the 36 large NFC frames) fit on **6 sheets** of 272×480 on a 16 px grid, pictures 16–21 |
+| First upload | ≈15 s at 460800 baud (6 × 32 KB + `0x33` each) |
+| microSD update | removes uploaded pictures (`image/` is replaced), Data-Flash records survive → re-upload needed |
+
+The 16 px grid keeps every icon in its own JPEG 4:2:0 blocks, so colours do not bleed into a
+neighbour's black backing. Animations (`0x28`) only work with the panel's own icon files; Petrel
+steps them from the host instead.
+
+## Ways to write real icon files that were ruled out
+
+| Idea | Result |
+|---|---|
+| `0x20` | a second icon-row draw command (`AA 20 x y mode library id…`, like `0x23` with the library as its own byte) – no file access |
+| Lua (`3:/main.lua`, `file_write`) | the firmware contains Dacai's Lua 5.3 with file functions, but `main.lua` is not run in the DWIN-emulation mode (no log files, no marker pictures) |
+| USB pads J3 | no USB device appears on the host in normal operation |
+| FEL (Allwinner boot mode) | would work only with soldering on every panel – not pursued |
 
 ## Unknown / not tested
 

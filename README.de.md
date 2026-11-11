@@ -22,8 +22,8 @@ Hier liegt alles, was nötig war, damit Petrel auf einem DACAI-Display richtig l
 
 | | Was | Wo |
 |---|---|---|
-| 🔧 | 8 kleine Patches für Petrel (jeder per Schalter in `Petrel.env`) | [`patches/`](patches/) |
-| 🖼️ | Fertiges SD-Karten-Paket: 189 Icons (74 im gefüllten Farbstil neu gezeichnet + 3 neue), neutrales Startbild, klare Monospace-Schrift | [`sd-overlay/`](sd-overlay/) |
+| 🔧 | Ein `DacaiDriver` für Petrel (an Petrel vorgeschlagen): Grafiken **und Icons kommen über das Kabel – keine SD-Karte nötig** – plus 4 optionale Extras | [`patches/`](patches/) |
+| 🖼️ | ★ Optionales SD-Karten-Paket: 189 Icons (74 im gefüllten Farbstil neu gezeichnet + 3 neue), neutrales Startbild, klare Monospace-Schrift | [`sd-overlay/`](sd-overlay/) |
 | 🧰 | Werkzeuge: DWIN oder DACAI erkennen, Icon-Bibliothek (ZICO) bauen, Schrift bauen, Startbild rendern, SD-Ordner zusammenstellen | [`tools/`](tools/) |
 | 📖 | Was DACAI anders macht – soweit bekannt erstmals dokumentiert | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
 | 🏠 | Optional für Home Assistant: Drucker einschalten → Klipper verbindet sich von selbst | [`examples/home-assistant/`](examples/home-assistant/) |
@@ -44,16 +44,20 @@ Andere DACAI-Drucker sollten sich gleich verhalten – Rückmeldungen willkommen
 ## ⚠️ Vorher lesen
 
 * **Niemals einen `DWIN_SET`-Ordner auf ein DACAI-Display spielen.** DACAI nutzt den Ordner `private`.
-* **Petrel nie ungepatcht mit einem DACAI-Display starten.** Beim ersten Start lädt Petrel
-  Grafiken über das Kabel hoch, DACAI nimmt sie halb an, und das Startbild ist danach kaputt
-  (per SD-Update reparierbar). Die Reihenfolge unten verhindert das.
+* **Petrel nie ungepatcht mit einem DACAI-Display starten.** Beim ersten Start lädt
+  unverändertes Petrel eine DWIN-Icon-Bibliothek über das Kabel, die DACAI als kaputte Bilder
+  speichert (mit Patches per `tools/dacai_artwork.py` reparierbar). Die Reihenfolge unten
+  verhindert das.
 * Vor dem Umstecken Display und Pi stromlos machen.
 
 ## Was du bekommst
 
 * Die komplette Petrel-Oberfläche am Original-Display: Drucken mit **Vorschaubild**, Tune,
   Prepare, Leveling (Bed Mesh, Schrauben, Z-Offset), Wartungserinnerungen, Info.
-* Gefüllte Farb-Icons, eine klarere fette Schrift (DejaVu Sans Mono), eigenes Startbild.
+* **Keine SD-Karte nötig:** Startbild, gemeinsame Grafik und alle Icons werden beim ersten
+  Start über das Kabel hochgeladen (etwa 15 s), danach nur noch Geändertes. Icon-Animationen
+  (Startfortschritt, Lüfter) steuert der Pi.
+* ★ Mit SD-Paket: gefüllte Farb-Icons und eine klarere fette Schrift (DejaVu Sans Mono).
 * Display wird **dunkel, solange der Drucker aus ist**, und geht an, sobald Klipper bereit ist
   (ohne Strommesser).
 * ★ Optional mit Home Assistant: beim Einschalten automatisch `FIRMWARE_RESTART`.
@@ -72,16 +76,17 @@ Ausführlich: [`docs/install.md`](docs/install.md) · Verkabelung: [`docs/wiring
    git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
    git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
    ```
-4. [`examples/Petrel.env`](examples/Petrel.env) nach `~/.config/Petrel/Petrel.env` kopieren.
-5. `cd ~/Petrel && bash install.sh`
-6. SD-Ordner bauen (`tools/make_sd_package.py`) und aufspielen: [`docs/sd-update.md`](docs/sd-update.md).
-7. Petrel neu starten – fertig.
+4. [`examples/Petrel.env`](examples/Petrel.env) nach `~/.config/Petrel/Petrel.env` kopieren (setzt `PETREL_DACAI=1`).
+5. `cd ~/Petrel && bash install.sh` – beim ersten Start lädt Petrel Grafiken und Icon-Blätter
+   über das Kabel hoch (etwa 15 s), fertig.
+6. ★ Optional: eigene Schrift / neu gezeichnete Icons per SD-Paket: [`docs/sd-update.md`](docs/sd-update.md).
 
 ## Welches „Firmware-Update“ ist was?
 
 | Was | Hier erklärt? |
 |---|---|
-| **Display-Grafik** (Icons, Schrift, Startbild) per microSD | ✅ [`docs/sd-update.md`](docs/sd-update.md) – inkl. Rückweg zum Original |
+| **Display-Grafik** über das Kabel (Startbild, Icons) | ✅ automatisch mit `PETREL_DACAI=1` |
+| ★ **Display-Grafik** per microSD (Schrift, neu gezeichnete Icons) | ✅ [`docs/sd-update.md`](docs/sd-update.md) – inkl. Rückweg zum Original; danach einmal `tools/dacai_artwork.py` |
 | **Petrel** (die Oberfläche auf dem Pi) | ✅ [README.md → Updating Petrel](README.md#updating-petrel) |
 | **Klipper-Firmware auf dem Drucker-Mainboard** | ❌ nicht Teil dieses Projekts – der Drucker muss schon mit Klipper laufen |
 | **Betriebssystem/Bootloader des Display-Controllers** | ❌ nie nötig, nicht flashen |
@@ -90,13 +95,13 @@ Ausführlich: [`docs/install.md`](docs/install.md) · Verkabelung: [`docs/wiring
 
 ## ★ Optionale Add-ons
 
-Für die Grundfunktion brauchst du nur Pi, Display, Kabel und eine SD-Karte. Alles mit ★ ist Zusatz:
+Für die Grundfunktion brauchst du nur Pi, Display und Kabel. Alles mit ★ ist Zusatz:
 
 | ★ Add-on | Du brauchst | Was es macht |
 |---|---|---|
 | **Autostart über Home Assistant** | Home Assistant, die Moonraker-Integration und eine Steckdose, die den Strom **misst** | Drucker einschalten → Home Assistant schickt `FIRMWARE_RESTART` → nach ~20 s bereit. Ohne Add-on: `FIRMWARE_RESTART` wie gewohnt in Mainsail/Fluidd. → [`examples/home-assistant/`](examples/home-assistant/) |
-| **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann SD-Ordner mit `--boot mein_boot.jpg` neu bauen |
-| **Eigene Icons / Schrift** | Python mit Pillow (+ fonttools) | `tools/make_icons.py` bzw. `tools/build_font.py` anpassen und neu bauen |
+| **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann `PETREL_BOOT_ARTWORK=/pfad/mein_boot.jpg` (Patch 0007) – geht über das Kabel |
+| **Eigene Schrift / neu gezeichnete Icons** | SD-Karte, Python mit Pillow (+ fonttools) | SD-Paket, siehe [`docs/sd-update.md`](docs/sd-update.md) |
 
 Das Dunkelschalten des Displays bei ausgeschaltetem Drucker braucht **keinen** Strommesser – Petrel erkennt das direkt an Klipper.
 

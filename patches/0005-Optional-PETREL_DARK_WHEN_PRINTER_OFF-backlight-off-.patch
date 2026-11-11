@@ -1,7 +1,7 @@
-From 00d196e6e7c76aae6ce21bfe78853c30d140ccda Mon Sep 17 00:00:00 2001
+From 9345a870ace1bb4bec3b2ecf77c6a3844a753310 Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
-Subject: [PATCH 5/8] Optional PETREL_DARK_WHEN_PRINTER_OFF: backlight off
+Subject: [PATCH 5/7] Optional PETREL_DARK_WHEN_PRINTER_OFF: backlight off
  while the printer MCU is unreachable
 
 ---
