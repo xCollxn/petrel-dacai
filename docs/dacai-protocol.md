@@ -64,9 +64,18 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
 * The DWIN extended UART (`0x38` baud divisor, `0x39` transmit, `0x3A` receive) is **not
   available**: no answer on the host UART, and no activity on any spare pin while sending `0x39`
   for 20 s. The 10-pin header has no extra UART pins.
-* Unpopulated headers: **J3** (3 holes next to the SD slot) = GND (square) + two floating pins
-  (~0.9 V, unchanged by `0x38`/`0x39`); **J2** (2 holes next to the crystal) = GND (square) +
-  3.3 V, probably a boot strap – do not short it.
+* Host UART (traced with a multimeter): header **DIN → R10 → pin 41 `PE8` (UART2_RX)**,
+  header **DOUT → D2 → pin 42 `PE7` (UART2_TX)**.
+* Other UART options of the SoC (datasheet): UART0 `PE0`/`PE1` (pins 49/48), UART1 `PA2`/`PA3`
+  (pins 64/63). Not connected to any header we found; whether they are routed at all is unknown.
+* Unpopulated headers: **J3** (3 holes next to the SD slot) = GND (square) + **USB D− (pin 68)**
+  (outer hole) + **USB D+ (pin 69)** (middle hole) – the SoC's USB port, not a UART (floating
+  ~0.9 V). **J2** (2 holes next to the crystal) = GND (square) + 3.3 V, probably a boot strap
+  (e.g. SPI flash disable → USB FEL mode) – untested, do not short it during normal use.
+
+![Board](img/dacai-board-annotated.jpg)
+
+![SoC pins](img/dacai-f1c100s-uart-pins.jpg)
 
 ## ZICO icon library
 
