@@ -1,3 +1,34 @@
+diff --git a/boot_artwork.py b/boot_artwork.py
+index f46d0b0..0f83a28 100644
+--- a/boot_artwork.py
++++ b/boot_artwork.py
+@@ -1,5 +1,6 @@
+ """Synchronize Petrel's boot JPEG directly into panel picture slot 0."""
+ import hashlib
++import os
+ from io import BytesIO
+ import logging
+ from pathlib import Path
+@@ -14,7 +15,9 @@ MAGIC = b'PETBOOT1'
+ _attempts = set()
+ 
+ 
+-def sync(lcd, source=SOURCE, *, force=False):
++def sync(lcd, source=None, *, force=False):
++    # PETREL_BOOT_ARTWORK: own boot picture instead of the bundled one.
++    source = source or os.environ.get('PETREL_BOOT_ARTWORK') or SOURCE
+     data = Path(source).read_bytes()
+     if len(data) > 32767:
+         raise ValueError('Boot JPEG must fit before SRAM address 0x7FFF')
+@@ -35,7 +38,7 @@ def sync(lcd, source=SOURCE, *, force=False):
+         if lcd.read_flash(ADDRESS, SIZE) != invalid:
+             raise RuntimeError('Boot artwork metadata invalidation failed')
+     logging.info('Uploading Petrel boot artwork to picture slot 0')
+-    lcd.write_sram(0, data)
++    lcd.write_sram(0, lcd.prepare_picture(data) if hasattr(lcd, 'prepare_picture') else data)
+     lcd.serial.flush()
+     time.sleep(.1)
+     _attempts.add(record)
 diff --git a/dwin_protocol.py b/dwin_protocol.py
 index d8ce8c2..fc798f3 100644
 --- a/dwin_protocol.py
@@ -251,8 +282,21 @@ index fbfaff6..da4e199 100644
          items.append(('update', '', None))
          return items
  
+diff --git a/shared_artwork.py b/shared_artwork.py
+index f8dd309..cb15d51 100644
+--- a/shared_artwork.py
++++ b/shared_artwork.py
+@@ -36,7 +36,7 @@ def sync(lcd, source=SOURCE, *, force=False):
+     logging.info('Uploading shared UI artwork to picture slot 1')
+     from lcd_resources import ICON_LIBRARY_ID
+     lcd.configure_animation(0, False, ICON_LIBRARY_ID, ICON_BOOT_FIRST, ICON_BOOT_LAST, 0, 320, 10)
+-    lcd.write_sram(0, data)
++    lcd.write_sram(0, lcd.prepare_picture(data) if hasattr(lcd, 'prepare_picture') else data)
+     lcd.serial.flush()
+     time.sleep(.1)
+     _attempts.add(record)
 diff --git a/t5uic1_driver.py b/t5uic1_driver.py
-index 8e29fbf..6f9e152 100644
+index 8e29fbf..fa48369 100644
 --- a/t5uic1_driver.py
 +++ b/t5uic1_driver.py
 @@ -8,6 +8,7 @@ renderers used by Petrel to preserve its current visual output.
@@ -263,17 +307,20 @@ index 8e29fbf..6f9e152 100644
  import struct
  import time
  import unicodedata
-@@ -23,6 +24,9 @@ import buzzer_control
+@@ -23,6 +24,12 @@ import buzzer_control
  import serial
  from graphite_theme import BACKGROUND_COLOR
  
 +# DACAI: thumbnails drawn from rectangles instead of SRAM JPEG (0x24).
 +RECT_THUMBNAILS = os.environ.get('PETREL_RECT_THUMBNAILS') == '1'
++# DACAI: own SRAM JPEG opcode 0x70, inverted 0x27 bit 7, Picture Flash files need FF D9 at 32 KB.
++DACAI = os.environ.get('PETREL_DACAI') == '1'
++DACAI_PICTURES = DACAI and os.environ.get('PETREL_DACAI_PICTURE_UPLOAD') == '1'
 +
  
  class T5UIC1ProtocolError(RuntimeError):
      """Raised when a panel response is malformed or does not match a request."""
-@@ -182,8 +186,12 @@ class T5UIC1Display:
+@@ -182,8 +189,12 @@ class T5UIC1Display:
                      raise T5UIC1TimeoutError("DWIN handshake timed out")
              # The panel CFG already selects portrait orientation. Preserve
              # its power-on picture instead of reapplying direction via 0x34.
@@ -282,13 +329,13 @@ index 8e29fbf..6f9e152 100644
 +            # DACAI panels (e.g. Ender 3 Max Neo) load artwork from their
 +            # microSD 'private' folder; UART Picture Flash writes corrupt them.
 +            sd_assets = os.environ.get('PETREL_LCD_SD_ASSETS') == '1'
-+            if not sd_assets:
++            if not sd_assets or DACAI_PICTURES:
 +                from boot_artwork import sync
 +                sync(self)
              # Present the complete boot frame before packing/checking icons.
              # Existing panel icons can animate throughout an unchanged sync.
              if startup_progress is not None:
-@@ -191,8 +199,11 @@ class T5UIC1Display:
+@@ -191,8 +202,13 @@ class T5UIC1Display:
                  self.show_jpeg(0)
                  startup_progress(self, 40)
                  self.update()
@@ -296,18 +343,24 @@ index 8e29fbf..6f9e152 100644
 -            self._startup_sync_shared_artwork()
 +            if sd_assets:
 +                self._assets_synced = True
++                if DACAI_PICTURES:
++                    self._startup_sync_shared_artwork()
 +            else:
 +                self._startup_sync_icons()
 +                self._startup_sync_shared_artwork()
              from lcd_resources import ICON_LIBRARY_ID
              self._boot_animation_library = ICON_LIBRARY_ID
              if startup_progress is not None:
-@@ -787,9 +798,56 @@ class T5UIC1Display:
+@@ -787,9 +803,60 @@ class T5UIC1Display:
      def show_sram_jpeg(self, x, y, address=0, *, background=True, enhanced=False):
          if not isinstance(address, int) or not 0 <= address < self.SRAM_SIZE:
              raise ValueError("SRAM address outside 32KB range")
 +        if RECT_THUMBNAILS:
 +            self._draw_shadow_jpeg(x, y, address, background)
++            return
++        if DACAI:
++            # DACAI ignores 0x24 and draws SRAM JPEGs (opaque) with its own 0x70.
++            self._send(0x70, self._words(x, y, address))
 +            return
          mode = (bool(background) << 7) | (bool(enhanced) << 5)
          self._send(0x24, self._words(x, y) + bytes((mode,)) + self._word(address))
@@ -359,7 +412,31 @@ index 8e29fbf..6f9e152 100644
      def cache_jpeg(self, jpeg_id, area=1):
          if not isinstance(jpeg_id, int) or not 0 <= jpeg_id <= 15:
              raise ValueError("JPEG ID must be 0..15")
-@@ -865,6 +923,13 @@ class T5UIC1Display:
+@@ -811,8 +878,23 @@ class T5UIC1Display:
+         if cache_id not in (0, 1):
+             raise ValueError("virtual display area must be 0 or 1")
+         mode = self._image_mode(cache_id, background, restore, enhanced)
++        if DACAI:
++            mode ^= 0x80  # DACAI: bit 7 set = black transparent, clear = opaque
+         self._send(0x27, bytes((mode,)) + self._words(x0, y0, x1, y1, x, y))
+ 
++    def prepare_picture(self, data):
++        """DACAI writes the whole 32 KB SRAM as the picture file and rejects files
++        that do not end with FF D9: pad the JPEG with a COM segment to exactly 32 KB."""
++        if not DACAI:
++            return data
++        data = bytes(data)
++        if data[:2] != b"\xff\xd8" or data[-2:] != b"\xff\xd9":
++            raise ValueError("picture must be a complete JPEG")
++        pad = self.SRAM_SIZE - len(data) - 4
++        if pad < 0:
++            raise ValueError("JPEG too large for one DACAI picture (max 32764 bytes)")
++        return data[:2] + b"\xff\xfe" + struct.pack(">H", pad + 2) + bytes(pad) + data[2:]
++
+     def configure_animation(self, animation_id, enabled, library_id,
+                             first_icon, last_icon, x, y, interval,
+                             *, restart_from_first=True):
+@@ -865,6 +947,13 @@ class T5UIC1Display:
          if not 0 <= address < limit or address + len(data) > limit:
              raise ValueError("memory write outside selected memory range")
  

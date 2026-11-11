@@ -53,7 +53,7 @@ Stopping/starting Petrel without sudo (Moonraker manages it after install):
 | `LCD UART unavailable; reconnect scheduled` in a loop | patch 0001 missing (bare `A5 4F 4B` flash ACK) |
 | Menu texts missing / Chinese snippets / no icons | SD overlay not flashed, or Petrel uploaded artwork over UART (patch 0002 / `PETREL_LCD_SD_ASSETS=1` missing) |
 | Boot logo corrupted | unpatched Petrel ran once → re-flash the SD folder |
-| No thumbnail in the file preview | `PETREL_RECT_THUMBNAILS=1` missing; also check the G-code has thumbnails (`/server/files/metadata`) |
+| No thumbnail in the file preview | `PETREL_DACAI=1` (patch 0007) or `PETREL_RECT_THUMBNAILS=1` missing; also check the G-code has thumbnails (`/server/files/metadata`) |
 | Your own test drawing does not appear | send `AA 3D CC 33 C3 3C` (update) after drawing |
 | Knob runs backwards | swap the numbers in `PETREL_ENCODER_PINS` |
 | `Buzzer GPIO conflicts with encoder/button` | expected with this wiring, harmless |

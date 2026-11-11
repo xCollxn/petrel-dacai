@@ -11,9 +11,10 @@ Base: [sezgynus/Petrel](https://github.com/sezgynus/Petrel) commit
 | `0004-Optional-PETREL_HIDE_QR-…` | `PETREL_HIDE_QR=1` | `info_qr.py`, `petrel_ui.py` |
 | `0005-Optional-PETREL_DARK_WHEN_PRINTER_OFF-…` | `PETREL_DARK_WHEN_PRINTER_OFF=1` | `petrel_ui.py` |
 | `0006-Maintenance-belt-and-lead-screw-…` | always | `maintenance_care.py`, `maintenance_experience.py`, `maintenance_icons.py` |
+| `0007-DACAI-0x70-SRAM-JPEG-0x27-bit-7-picture-upload-…` | `PETREL_DACAI=1`, `PETREL_DACAI_PICTURE_UPLOAD=1`, `PETREL_BOOT_ARTWORK` | `t5uic1_driver.py`, `boot_artwork.py`, `shared_artwork.py` |
 | `petrel-dacai-all.patch` | – | all of the above as one diff |
 
-Without their switch, 0002–0005 leave Petrel's behaviour unchanged, so they are safe on DWIN
+Without their switch, 0002–0005 and 0007 leave Petrel's behaviour unchanged, so they are safe on DWIN
 screens too. 0006 uses icon IDs 186–188, which exist only in this project's SD overlay.
 
 Apply as commits (keeps the tree clean for `install.sh`):

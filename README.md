@@ -22,7 +22,7 @@ This project contains everything that was needed to make Petrel work properly on
 
 | | What | Where |
 |---|---|---|
-| 🔧 | 6 small patches for Petrel (each one switchable in `Petrel.env`) | [`patches/`](patches/) |
+| 🔧 | 7 small patches for Petrel (each one switchable in `Petrel.env`) | [`patches/`](patches/) |
 | 🖼️ | A ready-made microSD overlay: 189 icons (74 redrawn in a filled colour style + 3 new), a neutral boot image, a crisp monospace font | [`sd-overlay/`](sd-overlay/) |
 | 🧰 | Tools: detect DWIN vs. DACAI, build icon libraries (ZICO), build fonts, render boot images, assemble the SD folder | [`tools/`](tools/) |
 | 📖 | What DACAI does differently – documented for the first time as far as we know | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
@@ -111,12 +111,13 @@ Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`]
 |---|---|---|
 | 0001 | – (always active) | Accepts DACAI's unframed `A5 4F 4B` data-flash acknowledgement |
 | 0002 | `PETREL_LCD_SD_ASSETS=1` | Never uploads boot image / icons / artwork over UART – they come from the SD card |
-| 0003 | `PETREL_RECT_THUMBNAILS=1` | DACAI cannot show JPEGs from SRAM (`0x24`); thumbnails are drawn from filled rectangles instead (≈1.5 s for 128×128) |
+| 0003 | `PETREL_RECT_THUMBNAILS=1` | Fallback: thumbnails drawn from filled rectangles (≈1.5 s for 128×128). Not needed with 0007 |
 | 0004 | `PETREL_HIDE_QR=1` | Hides the project QR code on the Info page (it is cut off on DACAI) |
 | 0005 | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while Klipper reports the printer board unreachable; the knob wakes it for 10 s |
 | 0006 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
+| 0007 | `PETREL_DACAI=1` (+ `PETREL_DACAI_PICTURE_UPLOAD=1`, `PETREL_BOOT_ARTWORK=…`) | Thumbnails with DACAI's own `0x70` (≈3× faster than rectangles), `0x27` bit 7 fix, and boot / shared pictures uploaded over UART (padded to 32 KB) – icons still come from the SD card |
 
-`patches/petrel-dacai-all.patch` contains all six as one diff.
+`patches/petrel-dacai-all.patch` contains all seven as one diff.
 
 ## ★ Optional add-ons
 
