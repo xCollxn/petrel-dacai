@@ -50,6 +50,16 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    ascent 220/256, descent 36/256. Any replacement must keep 0.5 em advances, otherwise UIs that
    assume fixed 8/10 px cells break (`tools/build_font.py`).
 
+## Hardware and extended UART
+
+* Controller on the Rev 1.5 board: **Allwinner F1C100s** (U4) with an 8-pin SPI flash (U3).
+* The DWIN extended UART (`0x38` baud divisor, `0x39` transmit, `0x3A` receive) is **not
+  available**: no answer on the host UART, and no activity on any spare pin while sending `0x39`
+  for 20 s. The 10-pin header has no extra UART pins.
+* Unpopulated headers: **J3** (3 holes next to the SD slot) = GND (square) + two floating pins
+  (~0.9 V, unchanged by `0x38`/`0x39`); **J2** (2 holes next to the crystal) = GND (square) +
+  3.3 V, probably a boot strap – do not short it.
+
 ## ZICO icon library
 
 ```
@@ -68,5 +78,4 @@ the format.
 ## Unknown / not tested
 
 * Whether `config.txt` can raise the baud rate (would make thumbnails faster).
-* Whether the panel has a second UART usable as a general serial port (not on the 10-pin header).
 * Exact behaviour of other DACAI firmware revisions.
