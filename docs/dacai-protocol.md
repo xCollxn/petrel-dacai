@@ -27,13 +27,21 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    * data-flash write `0x31 A5 …` → `A5 4F 4B` (DWIN: `AA 31 A5 4F 4B CC 33 C3 3C`)
    * SRAM write `0x31 5A …` → `5A 4F 4B` (DWIN: no answer) – a handy non-destructive way to tell
      the two panels apart (`tools/dacai_probe.py`).
-3. **No JPEG from SRAM.** `0x24` (show SRAM JPEG) does nothing, in every mode tested
-   (0x00, 0x20, 0x80, 0xA0, without mode byte). SRAM writes themselves work.
-   → Thumbnails: decode on the host and draw horizontal colour runs with `0x05`
-   (128×128 ≈ 1000 rectangles ≈ 15 KB ≈ 1.5 s).
-4. **Picture-flash uploads over UART are not reliable.** Uploading pictures/icon blocks the
-   DWIN way (SRAM + `0x33`) is acknowledged, but the icons never show up and the boot picture
-   ends up broken. Artwork has to come from the SD card.
+3. **JPEG from SRAM uses `0x70`, not `0x24`.** `0x24` does nothing in every mode tested.
+   DACAI has its own command (also used by Marlin ProUI with `DACAI_DISPLAY`):
+   ```
+   AA 70 <x:u16> <y:u16> <sram_addr:u16> CC 33 C3 3C
+   ```
+   Baseline JPEG written to SRAM with `0x31 5A` (128-byte chunks as in Marlin), then `0x70`
+   draws it opaque. 128×128 (≈5 KB): ≈0.5 s upload + instant draw, vs. ≈1.5 s with `0x05`
+   rectangles. Tested after flashing the DACAI firmware update from mriscoc
+   (`display assets/dacai_update.zip`, build May 18 2022) – not tested before the update.
+   Note: Petrel turns the backlight off when it stops; test scripts must send `0x30 FF`.
+4. **Picture-flash uploads over UART do not work.** `0x33 5A A5 <id>` answers framed
+   `AA 33 4F 4B`, but the picture never becomes usable: neither `0x22` nor `0x25`/`0x26` shows
+   it, also not after a power cycle (tested with a free slot 9 and an existing slot 2; `0x22`
+   with slot 1 from SD works). Uploading Petrel's artwork the DWIN way broke the boot picture.
+   Artwork has to come from the SD card.
 5. **Artwork format.** `private/` instead of `DWIN_SET/`:
    ```
    private/config.txt          register settings, e.g. "R1=07; 115200"
