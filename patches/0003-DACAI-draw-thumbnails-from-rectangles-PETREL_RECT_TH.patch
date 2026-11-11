@@ -1,20 +1,20 @@
-From 3d31575a4e1f3911db61303b14adb45c9c91695d Mon Sep 17 00:00:00 2001
+From db75d66a86877c45f5cb96f9213d2e23b068be42 Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
-Subject: [PATCH 3/6] DACAI: draw thumbnails from rectangles
+Subject: [PATCH 3/8] DACAI: draw thumbnails from rectangles
  (PETREL_RECT_THUMBNAILS)
 
 ---
- t5uic1_driver.py | 57 ++++++++++++++++++++++++++++++++++++++++++++++++
+ petrel/hardware/dwin/driver.py | 57 ++++++++++++++++++++++++++++++++++
  1 file changed, 57 insertions(+)
 
-diff --git a/t5uic1_driver.py b/t5uic1_driver.py
-index d3df767..6f9e152 100644
---- a/t5uic1_driver.py
-+++ b/t5uic1_driver.py
-@@ -24,6 +24,9 @@ import buzzer_control
+diff --git a/petrel/hardware/dwin/driver.py b/petrel/hardware/dwin/driver.py
+index 20889d1..8deb2c3 100644
+--- a/petrel/hardware/dwin/driver.py
++++ b/petrel/hardware/dwin/driver.py
+@@ -24,6 +24,9 @@ import petrel.features.buzzer.control as buzzer_control
  import serial
- from graphite_theme import BACKGROUND_COLOR
+ from petrel.ui.theme import BACKGROUND_COLOR
  
 +# DACAI: thumbnails drawn from rectangles instead of SRAM JPEG (0x24).
 +RECT_THUMBNAILS = os.environ.get('PETREL_RECT_THUMBNAILS') == '1'

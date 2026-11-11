@@ -1,0 +1,84 @@
+From 97da577b48294840c037704424d13f350ad564d0 Mon Sep 17 00:00:00 2001
+From: petrel-dacai <petrel-dacai@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 17:47:34 +0100
+Subject: [PATCH 5/6] Optional PETREL_DARK_WHEN_PRINTER_OFF: backlight off
+ while the printer MCU is unreachable
+
+---
+ petrel_ui.py | 51 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 51 insertions(+)
+
+diff --git a/petrel_ui.py b/petrel_ui.py
+index d9a6f4e..da4e199 100644
+--- a/petrel_ui.py
++++ b/petrel_ui.py
+@@ -1,3 +1,4 @@
++import os
+ from heater_events import heater_ready
+ from lcd_resources import ICON_BOOT_FIRST, ICON_BOOT_LAST
+ from lcd_resources import ICON_ACCELERATION, ICON_BRIGHTNESS, ICON_BUZZER, ICON_CLICK_TONE, ICON_CORNER_SPEED, ICON_CRUISE_RATIO, ICON_DIM_BRIGHTNESS, ICON_ENCODER_TONE, ICON_FLOW, ICON_IDLE_DIM, ICON_LIGHT, ICON_LIVE_JOG, ICON_MOTION, ICON_MOTOR_OFF, ICON_PREHEAT_PROFILE, ICON_VELOCITY, ICON_VOLUME
+@@ -2167,11 +2168,61 @@ class PetrelDisplay(RFIDViewMixin, RecoveryViewMixin, PrintFocusMixin, PowerShor
+             return True  # First interaction wakes without activating a hidden action.
+         return False
+ 
++    def _mcu_unreachable(self):
++        """Ask Klipper (via Moonraker) whether the printer board is switched off."""
++        now = time.monotonic()
++        if now < getattr(self, '_mcu_check_at', 0):
++            return getattr(self, '_mcu_off_cached', False)
++        self._mcu_check_at = now + 2.0
++        off = False
++        try:
++            import json, urllib.request
++            url = os.environ.get('MOONRAKER_URL', 'http://127.0.0.1:7125').rstrip('/')
++            with urllib.request.urlopen(url + '/printer/info', timeout=0.5) as resp:
++                info = json.load(resp)['result']
++            msg = str(info.get('state_message', '')).lower()
++            off = (info.get('state') in ('shutdown', 'error')
++                   and ('lost communication' in msg or 'unable to connect' in msg))
++        except Exception:
++            off = getattr(self, '_mcu_off_cached', False)
++        self._mcu_off_cached = off
++        return off
++
++    def _printer_off_backlight_tick(self, values):
++        """dark panel while the printer board (Klipper MCU) is off."""
++        if os.environ.get('PETREL_DARK_WHEN_PRINTER_OFF') != '1' or not values:
++            return
++        now = time.monotonic()
++        pd = getattr(self, 'pd', None)
++        ready = getattr(getattr(pd, 'state', None), 'ready', False)
++        printer_off = not ready and self._mcu_unreachable()
++        if printer_off:
++            since = getattr(self, '_printer_off_since', None)
++            if since is None:
++                self._printer_off_since = since = now
++            if (not getattr(self, '_display_dimmed', False) and now - since >= 2
++                    and now - self._display_last_activity >= 10
++                    and not getattr(self, '_display_edit', False)):
++                self.lcd.set_backlight(0)
++                self._display_dimmed = True
++                self._printer_dark = True
++        else:
++            self._printer_off_since = None
++            if ready:
++                self._mcu_off_cached = False
++            if getattr(self, '_printer_dark', False) and ready:
++                self._printer_dark = False
++                self._display_last_activity = now
++                if getattr(self, '_display_dimmed', False):
++                    self._display_dimmed = False
++                    self.lcd.set_backlight(display_settings.raw_brightness(values[0]))
++
+     def _display_idle_tick(self):
+         panel = getattr(getattr(self,'pd',None),'maintenance_panel',None)
+         if panel is not None and panel.pending:
+             return
+         values = getattr(self, '_display_values', None)
++        self._printer_off_backlight_tick(values)
+         if (values and values[1] and not getattr(self, '_display_dimmed', False)
+                 and time.monotonic() - self._display_last_activity >= values[1] * 60
+                 and not getattr(self, '_display_edit', False)):
+-- 
+2.47.3
+

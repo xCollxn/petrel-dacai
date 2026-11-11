@@ -1,0 +1,135 @@
+From 2815df787a61eb91eb6ec3e79270006a5a7f576f Mon Sep 17 00:00:00 2001
+From: xCollxn <81695022+xCollxn@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 20:10:12 +0100
+Subject: [PATCH 7/8] DACAI: 0x70 SRAM JPEG, 0x27 bit 7, picture upload over
+ UART
+
+PETREL_DACAI=1: draw SRAM JPEGs with the DACAI opcode 0x70 (0x24 is not implemented) and flip bit 7 of 0x27 (DACAI: set = black transparent, clear = opaque).
+
+PETREL_DACAI_PICTURE_UPLOAD=1: upload boot and shared artwork over UART even with PETREL_LCD_SD_ASSETS=1. DACAI stores the whole 32 KB SRAM as the picture file and only accepts files ending in FF D9, so the JPEG is padded with a COM segment to exactly 32 KB.
+
+PETREL_BOOT_ARTWORK: path to an own boot JPEG.
+---
+ petrel/artwork/boot.py         |  8 ++++++--
+ petrel/artwork/shared.py       |  3 ++-
+ petrel/hardware/dwin/driver.py | 28 +++++++++++++++++++++++++++-
+ 3 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/petrel/artwork/boot.py b/petrel/artwork/boot.py
+index bfa4fda..4f5b896 100644
+--- a/petrel/artwork/boot.py
++++ b/petrel/artwork/boot.py
+@@ -1,5 +1,6 @@
+ """Synchronize Petrel's boot JPEG directly into panel picture slot 0."""
+ import hashlib
++import os
+ from io import BytesIO
+ import logging
+ from pathlib import Path
+@@ -14,7 +15,9 @@ MAGIC = b'PETBOOT1'
+ _attempts = set()
+ 
+ 
+-def sync(lcd, source=SOURCE, *, force=False):
++def sync(lcd, source=None, *, force=False):
++    # PETREL_BOOT_ARTWORK: own boot picture instead of the bundled one.
++    source = source or os.environ.get('PETREL_BOOT_ARTWORK') or SOURCE
+     data = Path(source).read_bytes()
+     if len(data) > 32767:
+         raise ValueError('Boot JPEG must fit before SRAM address 0x7FFF')
+@@ -35,7 +38,8 @@ def sync(lcd, source=SOURCE, *, force=False):
+         if lcd.read_flash(ADDRESS, SIZE) != invalid:
+             raise RuntimeError('Boot artwork metadata invalidation failed')
+     logging.info('Uploading Petrel boot artwork to picture slot 0')
+-    lcd.write_sram(0, data)
++    from petrel.hardware.dwin.driver import DACAI, dacai_picture_payload
++    lcd.write_sram(0, dacai_picture_payload(data) if DACAI else data)
+     lcd.serial.flush()
+     time.sleep(.1)
+     _attempts.add(record)
+diff --git a/petrel/artwork/shared.py b/petrel/artwork/shared.py
+index d1f62eb..8220357 100644
+--- a/petrel/artwork/shared.py
++++ b/petrel/artwork/shared.py
+@@ -36,7 +36,8 @@ def sync(lcd, source=SOURCE, *, force=False):
+     logging.info('Uploading shared UI artwork to picture slot 1')
+     from petrel.artwork.resources import ICON_LIBRARY_ID
+     lcd.configure_animation(0, False, ICON_LIBRARY_ID, ICON_BOOT_FIRST, ICON_BOOT_LAST, 0, 320, 10)
+-    lcd.write_sram(0, data)
++    from petrel.hardware.dwin.driver import DACAI, dacai_picture_payload
++    lcd.write_sram(0, dacai_picture_payload(data) if DACAI else data)
+     lcd.serial.flush()
+     time.sleep(.1)
+     _attempts.add(record)
+diff --git a/petrel/hardware/dwin/driver.py b/petrel/hardware/dwin/driver.py
+index 8deb2c3..46f8fbf 100644
+--- a/petrel/hardware/dwin/driver.py
++++ b/petrel/hardware/dwin/driver.py
+@@ -26,6 +26,21 @@ from petrel.ui.theme import BACKGROUND_COLOR
+ 
+ # DACAI: thumbnails drawn from rectangles instead of SRAM JPEG (0x24).
+ RECT_THUMBNAILS = os.environ.get('PETREL_RECT_THUMBNAILS') == '1'
++# DACAI: own SRAM JPEG opcode 0x70, inverted 0x27 bit 7, Picture Flash files need FF D9 at 32 KB.
++DACAI = os.environ.get('PETREL_DACAI') == '1'
++DACAI_PICTURES = DACAI and os.environ.get('PETREL_DACAI_PICTURE_UPLOAD') == '1'
++
++
++def dacai_picture_payload(data, size=0x8000):
++    """DACAI writes the whole 32 KB SRAM as the picture file and rejects files that do
++    not end with FF D9: pad the JPEG with a COM segment to exactly 32 KB."""
++    data = bytes(data)
++    if data[:2] != b"\xff\xd8" or data[-2:] != b"\xff\xd9":
++        raise ValueError("picture must be a complete JPEG")
++    pad = size - len(data) - 4
++    if pad < 0:
++        raise ValueError("JPEG too large for one DACAI picture (max 32764 bytes)")
++    return data[:2] + b"\xff\xfe" + struct.pack(">H", pad + 2) + bytes(pad) + data[2:]
+ 
+ 
+ class T5UIC1ProtocolError(RuntimeError):
+@@ -189,7 +204,7 @@ class T5UIC1Display:
+             # DACAI panels (e.g. Ender 3 Max Neo) load artwork from their
+             # microSD 'private' folder; UART Picture Flash writes corrupt them.
+             sd_assets = os.environ.get('PETREL_LCD_SD_ASSETS') == '1'
+-            if not sd_assets:
++            if not sd_assets or DACAI_PICTURES:
+                 from petrel.artwork.boot import sync
+                 sync(self)
+             # Present the complete boot frame before packing/checking icons.
+@@ -201,6 +216,8 @@ class T5UIC1Display:
+                 self.update()
+             if sd_assets:
+                 self._assets_synced = True
++                if DACAI_PICTURES:
++                    self._startup_sync_shared_artwork()
+             else:
+                 self._startup_sync_icons()
+                 self._startup_sync_shared_artwork()
+@@ -801,6 +818,10 @@ class T5UIC1Display:
+         if RECT_THUMBNAILS:
+             self._draw_shadow_jpeg(x, y, address, background)
+             return
++        if DACAI:
++            # DACAI ignores 0x24 and draws SRAM JPEGs (opaque) with its own 0x70.
++            self._send(0x70, self._words(x, y, address))
++            return
+         mode = (bool(background) << 7) | (bool(enhanced) << 5)
+         self._send(0x24, self._words(x, y) + bytes((mode,)) + self._word(address))
+ 
+@@ -869,8 +890,13 @@ class T5UIC1Display:
+         if cache_id not in (0, 1):
+             raise ValueError("virtual display area must be 0 or 1")
+         mode = self._image_mode(cache_id, background, restore, enhanced)
++        if DACAI:
++            mode ^= 0x80  # DACAI: bit 7 set = black transparent, clear = opaque
+         self._send(0x27, bytes((mode,)) + self._words(x0, y0, x1, y1, x, y))
+ 
++    def prepare_picture(self, data):
++        return dacai_picture_payload(data) if DACAI else data
++
+     def configure_animation(self, animation_id, enabled, library_id,
+                             first_icon, last_icon, x, y, interval,
+                             *, restart_from_first=True):
+-- 
+2.47.3
+

@@ -32,7 +32,7 @@ Hier liegt alles, was nötig war, damit Petrel auf einem DACAI-Display richtig l
 
 | Komponente | Version |
 |---|---|
-| **Petrel** | **v7.0.0-37, Commit [`9907edf`](https://github.com/sezgynus/Petrel/commit/9907edfac4a6e50b4c71f25613d522ffec4a49ba)** (30.10.2026) |
+| **Petrel** | **v7.0.0-54, Commit [`764d406`](https://github.com/sezgynus/Petrel/commit/764d40684ee8485a7d00ffb9df9fc0add77b79c1)** (11.11.2026, nach der Umstrukturierung). Patches für das ältere v7.0.0-37 (`9907edf`): [`patches/legacy-9907edf/`](patches/legacy-9907edf/) |
 | Klipper / Moonraker / Mainsail | v0.13.0-745 / v0.11.0 / 2.19 |
 | Raspberry Pi | Pi 5, Debian 13 (Raspberry Pi OS), UART `/dev/ttyAMA0` |
 | Drucker / Display | Ender-3 Max Neo (Creality 4.2.2), DACAI-4,3"-Display mit Drehknopf |
@@ -69,7 +69,7 @@ Ausführlich: [`docs/install.md`](docs/install.md) · Verkabelung: [`docs/wiring
    ```bash
    git clone https://github.com/sezgynus/Petrel.git ~/Petrel
    cd ~/Petrel
-   git checkout -b dacai 9907edfac4a6e50b4c71f25613d522ffec4a49ba
+   git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
    git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
    ```
 4. [`examples/Petrel.env`](examples/Petrel.env) nach `~/.config/Petrel/Petrel.env` kopieren.

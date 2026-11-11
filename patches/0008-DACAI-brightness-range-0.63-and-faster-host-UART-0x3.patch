@@ -1,0 +1,124 @@
+From 0bd697755d4b5bfa98c1ad74d2cbac05884650c8 Mon Sep 17 00:00:00 2001
+From: xCollxn <81695022+xCollxn@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 20:19:07 +0100
+Subject: [PATCH 8/8] DACAI: brightness range 0..63 and faster host UART (0x38)
+
+PETREL_DACAI=1: the DACAI firmware clamps 0x30 to 0..63 (63 = 100 %), so map Petrel's 0..255 onto 4..63 (0 stays off).
+
+PETREL_DACAI_BAUD=460800: 0x38 re-clocks the host UART (UART2) on DACAI until the panel loses power. Petrel raises the speed after the handshake, falls back to 115200 if the panel does not answer, resets the panel to 115200 on close and probes both speeds alternately while waiting for the panel (covers a crashed Petrel).
+---
+ petrel/hardware/dwin/driver.py  | 43 ++++++++++++++++++++++++++++++++-
+ petrel/hardware/dwin/startup.py |  7 ++++++
+ 2 files changed, 49 insertions(+), 1 deletion(-)
+
+diff --git a/petrel/hardware/dwin/driver.py b/petrel/hardware/dwin/driver.py
+index 46f8fbf..d92ef69 100644
+--- a/petrel/hardware/dwin/driver.py
++++ b/petrel/hardware/dwin/driver.py
+@@ -29,6 +29,9 @@ RECT_THUMBNAILS = os.environ.get('PETREL_RECT_THUMBNAILS') == '1'
+ # DACAI: own SRAM JPEG opcode 0x70, inverted 0x27 bit 7, Picture Flash files need FF D9 at 32 KB.
+ DACAI = os.environ.get('PETREL_DACAI') == '1'
+ DACAI_PICTURES = DACAI and os.environ.get('PETREL_DACAI_PICTURE_UPLOAD') == '1'
++# DACAI: 0x38 re-clocks the host UART (UART2) until the panel loses power, e.g. 460800.
++DACAI_BAUD = int(os.environ.get('PETREL_DACAI_BAUD') or 0) if DACAI else 0
++DWIN_UART_CLOCK = 15667200
+ 
+ 
+ def dacai_picture_payload(data, size=0x8000):
+@@ -199,6 +202,8 @@ class T5UIC1Display:
+                         break
+                 else:
+                     raise T5UIC1TimeoutError("DWIN handshake timed out")
++            if DACAI_BAUD and isinstance(self.serial, serial.Serial):
++                self._dacai_raise_baud(DACAI_BAUD)
+             # The panel CFG already selects portrait orientation. Preserve
+             # its power-on picture instead of reapplying direction via 0x34.
+             # DACAI panels (e.g. Ender 3 Max Neo) load artwork from their
+@@ -252,9 +257,41 @@ class T5UIC1Display:
+         from petrel.artwork.shared import sync
+         sync(self)
+ 
++    def _dacai_raise_baud(self, target):
++        divisor = max(1, round(DWIN_UART_CLOCK / target))
++        actual = round(DWIN_UART_CLOCK / divisor)
++        if self.serial.baudrate == actual:
++            return
++        with self._transaction_lock:
++            self._send(0x38, self._word(divisor))
++            self.serial.flush()
++        time.sleep(0.05)
++        self.serial.baudrate = actual
++        self._rx.clear()
++        for _ in range(3):
++            if self.handshake(0.5):
++                logging.info('DACAI host UART raised to %d baud', actual)
++                return
++        logging.warning('DACAI baud switch to %d failed; staying at 115200', actual)
++        with self._transaction_lock:
++            self._send(0x38, self._word(round(DWIN_UART_CLOCK / 115200)))
++            self.serial.flush()
++        time.sleep(0.05)
++        self.serial.baudrate = 115200
++        self._rx.clear()
++        if not self.handshake(1.0):
++            raise T5UIC1TimeoutError("DACAI baud fallback handshake timed out")
++
+     def close(self):
+         if not getattr(self, "_closed", False):
+             self._closed = True
++            if DACAI_BAUD and isinstance(self.serial, serial.Serial) and self.serial.baudrate != 115200:
++                # Leave the panel at its power-on speed so a restarted Petrel finds it at once.
++                try:
++                    self.serial.write(self.HEADER + bytes((0x38,)) + self._word(round(DWIN_UART_CLOCK / 115200)) + self.TAIL)
++                    self.serial.flush()
++                except Exception:
++                    pass
+             self.serial.close()
+             if getattr(self, '_flash_job', None) is not None or getattr(self, '_flash_queue', None):
+                 self._flash_abort(OSError('LCD disconnected during Flash transaction'))
+@@ -513,7 +550,11 @@ class T5UIC1Display:
+         return counts
+ 
+     def set_backlight(self, brightness):
+-        self._send(0x30, bytes((self._u8(brightness, "brightness"),)))
++        level = self._u8(brightness, "brightness")
++        if DACAI and level:
++            # DACAI firmware clamps 0x30 to 0..63 (63 = 100 %); keep 4 as darkest usable level.
++            level = max(4, (level * 63 + 127) // 255)
++        self._send(0x30, bytes((level,)))
+         self._backlight_raw = brightness
+ 
+     def set_orientation(self, direction, wait_ack=False, timeout=1.0):
+diff --git a/petrel/hardware/dwin/startup.py b/petrel/hardware/dwin/startup.py
+index fbfce06..18af921 100644
+--- a/petrel/hardware/dwin/startup.py
++++ b/petrel/hardware/dwin/startup.py
+@@ -1,4 +1,5 @@
+ """Nonblocking panel handshake; keep one UART open while waiting for power."""
++import os
+ import time
+ import serial
+ from petrel.hardware.dwin.transport import open_display_serial
+@@ -13,6 +14,9 @@ class PanelProbe:
+         self.received = bytearray()
+         self.next_send = 0
+         self.fast_until = 0
++        # DACAI keeps a raised host baud until power loss: probe both speeds alternately.
++        self.alt_baud = (int(os.environ.get('PETREL_DACAI_BAUD') or 0)
++                         if os.environ.get('PETREL_DACAI') == '1' and isinstance(self.serial, serial.Serial) else 0)
+ 
+     def accelerate(self):
+         self.fast_until = time.monotonic() + 10
+@@ -28,6 +32,9 @@ class PanelProbe:
+             self.received = self.received[-7:]
+         now = time.monotonic()
+         if now >= self.next_send:
++            if self.alt_baud:
++                self.serial.baudrate = self.alt_baud if self.serial.baudrate == 115200 else 115200
++                self.received.clear()
+             if self.serial.write(self.REQUEST) != len(self.REQUEST):
+                 raise OSError('Incomplete panel handshake write')
+             self.next_send = now + (.15 if now < self.fast_until else 5)
+-- 
+2.47.3
+

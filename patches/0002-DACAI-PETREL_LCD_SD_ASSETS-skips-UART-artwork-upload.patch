@@ -1,16 +1,16 @@
-From b47ca269a2ec794bf698b2eaa26be8207017be2f Mon Sep 17 00:00:00 2001
+From b91d2220ab30fe1e5003d2bcc9edc538bae5ceed Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
-Subject: [PATCH 2/6] DACAI: PETREL_LCD_SD_ASSETS skips UART artwork uploads
+Subject: [PATCH 2/8] DACAI: PETREL_LCD_SD_ASSETS skips UART artwork uploads
 
 ---
- t5uic1_driver.py | 16 ++++++++++++----
+ petrel/hardware/dwin/driver.py | 16 ++++++++++++----
  1 file changed, 12 insertions(+), 4 deletions(-)
 
-diff --git a/t5uic1_driver.py b/t5uic1_driver.py
-index 8e29fbf..d3df767 100644
---- a/t5uic1_driver.py
-+++ b/t5uic1_driver.py
+diff --git a/petrel/hardware/dwin/driver.py b/petrel/hardware/dwin/driver.py
+index 2757a06..20889d1 100644
+--- a/petrel/hardware/dwin/driver.py
++++ b/petrel/hardware/dwin/driver.py
 @@ -8,6 +8,7 @@ renderers used by Petrel to preserve its current visual output.
  
  import logging
@@ -23,13 +23,13 @@ index 8e29fbf..d3df767 100644
                      raise T5UIC1TimeoutError("DWIN handshake timed out")
              # The panel CFG already selects portrait orientation. Preserve
              # its power-on picture instead of reapplying direction via 0x34.
--            from boot_artwork import sync
+-            from petrel.artwork.boot import sync
 -            sync(self)
 +            # DACAI panels (e.g. Ender 3 Max Neo) load artwork from their
 +            # microSD 'private' folder; UART Picture Flash writes corrupt them.
 +            sd_assets = os.environ.get('PETREL_LCD_SD_ASSETS') == '1'
 +            if not sd_assets:
-+                from boot_artwork import sync
++                from petrel.artwork.boot import sync
 +                sync(self)
              # Present the complete boot frame before packing/checking icons.
              # Existing panel icons can animate throughout an unchanged sync.
@@ -45,7 +45,7 @@ index 8e29fbf..d3df767 100644
 +            else:
 +                self._startup_sync_icons()
 +                self._startup_sync_shared_artwork()
-             from lcd_resources import ICON_LIBRARY_ID
+             from petrel.artwork.resources import ICON_LIBRARY_ID
              self._boot_animation_library = ICON_LIBRARY_ID
              if startup_progress is not None:
 -- 

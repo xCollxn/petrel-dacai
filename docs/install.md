@@ -1,7 +1,7 @@
 # Installation – step by step
 
 Tested on Raspberry Pi 5 (Debian 13), Klipper v0.13.0, Moonraker v0.11.0, Mainsail 2.19,
-Petrel `9907edf`. Commands assume the Klipper user's home directory (`~`) and this repository
+Petrel `764d406` (v7.0.0-54). Commands assume the Klipper user's home directory (`~`) and this repository
 cloned to `~/petrel-dacai`.
 
 ## 1. Wiring and UART
@@ -33,7 +33,7 @@ written from the mainboard's point of view) and check 5 V/GND.
 ```bash
 git clone https://github.com/sezgynus/Petrel.git ~/Petrel
 cd ~/Petrel
-git checkout -b dacai 9907edfac4a6e50b4c71f25613d522ffec4a49ba
+git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
 git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
 git log --oneline | head -7          # six "DACAI / Optional / Maintenance" commits on top
 git status --short                   # must be empty (the installer requires a clean tree)

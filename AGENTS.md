@@ -36,7 +36,7 @@ it a requirement. Without it, `FIRMWARE_RESTART` from Mainsail/Fluidd after powe
 | 1 | Wiring per `docs/wiring.md`. Have the user measure DOUT→GND ≈ 3.3 V with 5 V connected before DOUT goes to the Pi. | value ≤ 3.3 V |
 | 2 | Enable UART (Pi 5: `dtparam=uart0=on` in `/boot/firmware/config.txt`, reboot – needs sudo, the user may have to type the password). | `/dev/ttyAMA0` exists, `pinctrl get 14,15` shows TXD0/RXD0 |
 | 3 | `python3 tools/dacai_probe.py --draw-test` with the display service stopped | handshake `aa 00 4f 4b …`, *DACAI panel*, user sees 4 squares |
-| 4 | Clone Petrel, `git checkout -b dacai 9907edf…`, `git am patches/000*.patch` | `git status --short` empty, 6 commits on top |
+| 4 | Clone Petrel, `git checkout -b dacai 764d406…`, `git am patches/000*.patch` | `git status --short` empty, 8 commits on top |
 | 5 | Copy `examples/Petrel.env` to `~/.config/Petrel/Petrel.env`, replace `USER` | file exists *before* install |
 | 6 | `cd ~/Petrel && bash install.sh` (user runs it, needs sudo) | `systemctl is-active Petrel` = active, log shows `LCD UART connected` |
 | 7 | Build SD folder (`tools/make_sd_package.py`), user flashes it (see `docs/sd-update.md`), Petrel stopped meanwhile | user sees Petrel icons, no Chinese text snippets |

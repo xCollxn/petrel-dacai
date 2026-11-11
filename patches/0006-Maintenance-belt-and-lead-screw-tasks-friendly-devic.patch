@@ -1,19 +1,19 @@
-From 69809c66d6f0ab3a881d4e108652928cebcefb4b Mon Sep 17 00:00:00 2001
+From 77c360bcf5b04774c77d584c126b400cc94d0838 Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
-Subject: [PATCH 6/6] Maintenance: belt and lead-screw tasks, friendly device
+Subject: [PATCH 6/8] Maintenance: belt and lead-screw tasks, friendly device
  names, axis badges
 
 ---
- maintenance_care.py       | 12 +++++++++++-
- maintenance_experience.py |  9 +++++++++
- maintenance_icons.py      | 13 +++++++++++++
+ petrel/features/maintenance/records/care.py  | 12 +++++++++++-
+ petrel/features/maintenance/ui/experience.py |  9 +++++++++
+ petrel/features/maintenance/ui/icons.py      | 13 +++++++++++++
  3 files changed, 33 insertions(+), 1 deletion(-)
 
-diff --git a/maintenance_care.py b/maintenance_care.py
+diff --git a/petrel/features/maintenance/records/care.py b/petrel/features/maintenance/records/care.py
 index 2e2d2b7..bb265e2 100644
---- a/maintenance_care.py
-+++ b/maintenance_care.py
+--- a/petrel/features/maintenance/records/care.py
++++ b/petrel/features/maintenance/records/care.py
 @@ -4,6 +4,8 @@ from collections.abc import Mapping
  MAX_CARE_DEVICES = 256
  TASKS = {
@@ -54,10 +54,10 @@ index 2e2d2b7..bb265e2 100644
          profile = 'xy_axis'
      elif device in ('stepper_z', 'axis_z'):
          profile = 'z_axis'
-diff --git a/maintenance_experience.py b/maintenance_experience.py
-index 2790ad7..1d6904d 100644
---- a/maintenance_experience.py
-+++ b/maintenance_experience.py
+diff --git a/petrel/features/maintenance/ui/experience.py b/petrel/features/maintenance/ui/experience.py
+index 24ccac0..3d9ffcd 100644
+--- a/petrel/features/maintenance/ui/experience.py
++++ b/petrel/features/maintenance/ui/experience.py
 @@ -64,6 +64,15 @@ def device_name(name):
             'axis_x':'X travel','axis_y':'Y travel','axis_z':'Z travel'}
      if name in known:
@@ -74,10 +74,10 @@ index 2790ad7..1d6904d 100644
      if name.startswith('endstop '):
          return device_name(name[8:])+' endstop'
      chip,separator,stepper=name.partition(' ')
-diff --git a/maintenance_icons.py b/maintenance_icons.py
-index 53c2b94..b8e172a 100644
---- a/maintenance_icons.py
-+++ b/maintenance_icons.py
+diff --git a/petrel/features/maintenance/ui/icons.py b/petrel/features/maintenance/ui/icons.py
+index a4d9f84..17a5aa3 100644
+--- a/petrel/features/maintenance/ui/icons.py
++++ b/petrel/features/maintenance/ui/icons.py
 @@ -18,6 +18,8 @@ def device_icon(device):
      if device.startswith('extruder'): return 9
      if device=='heater_bed': return 10
