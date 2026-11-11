@@ -46,11 +46,17 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    rectangles. Tested after flashing the DACAI firmware update from mriscoc
    (`display assets/dacai_update.zip`, build May 18 2022) – not tested before the update.
    Note: Petrel turns the backlight off when it stops; test scripts must send `0x30 FF`.
-4. **Picture-flash uploads over UART do not work.** `0x33 5A A5 <id>` answers framed
-   `AA 33 4F 4B`, but the picture never becomes usable: neither `0x22` nor `0x25`/`0x26` shows
-   it, also not after a power cycle (tested with a free slot 9 and an existing slot 2; `0x22`
-   with slot 1 from SD works). Uploading Petrel's artwork the DWIN way broke the boot picture.
-   Artwork has to come from the SD card.
+4. **Picture upload over UART works – if the JPEG is padded to exactly 32 KB.**
+   `0x33 5A A5 <id>` writes the *whole* 32 KB SRAM to the file `3:/image/<id>.jpg` on the panel's
+   flash, answers framed `AA 33 4F 4B` and invalidates the picture cache for `<id>`. The JPEG
+   loader then rejects any file that does not start with `FF D8` **and end with `FF D9`**
+   (firmware message `JPEG EOF(..)`), so a normal JPEG followed by leftover SRAM bytes never
+   shows up. Fix: insert a COM segment (`FF FE <len>`) right after SOI so that the JPEG is exactly
+   32768 bytes and ends with `FF D9`, upload it with `0x31 5A`, then send `0x33`.
+   Tested: `0x22` shows it, `0x25`/`0x26` cache + copy work, and it survives a power cycle.
+   Limit: one picture ≤ 32 KB (480×272 baseline JPEG at ~80 % quality ≈ 12–25 KB).
+   **Icon libraries cannot be written over UART** – the firmware only ever *reads*
+   `3:/icon/<n>.zico`; icons still need the SD card.
 5. **Artwork format.** `private/` instead of `DWIN_SET/`:
    ```
    private/config.txt          register settings, e.g. "R1=07; 115200"
@@ -66,6 +72,17 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
 7. **Font.** The stock font is a SimSun subset: monospaced, advance exactly 0.5 em,
    ascent 220/256, descent 36/256. Any replacement must keep 0.5 em advances, otherwise UIs that
    assume fixed 8/10 px cells break (`tools/build_font.py`).
+
+## Opcodes handled by the firmware
+
+From the command dispatcher of the DACAI firmware (`firmware.zlib` from mriscoc's
+`dacai_update.zip`, build May 18 2022, dispatcher at `0x80048b60`, load address `0x80000000`):
+
+`00 01 02 03 05 09 11 14 20 21 22 23 25 26 27 28 29 30 31 32 33 38 3D 70`
+
+Not handled (silently ignored): `08` bitmap, `24` SRAM JPEG (use `70`), `2A` EAN-13,
+`34` orientation, `39` extended-UART TX, anything else. `20` is DACAI-specific (text-like
+payload, not analysed yet). While an internal flag is set, only `E4` is accepted.
 
 ## Hardware and extended UART
 
