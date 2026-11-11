@@ -15,6 +15,9 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
 | `0x22` show JPEG from flash, area copy from picture 1 | ✅ | pictures come from `private/image/N.jpg` |
 | `0x30` backlight | ✅ | 0 = dark |
 | `0x32` read SRAM / data flash | ✅ | framed answer as on DWIN |
+| `0x28` / `0x29` native icon animation | ✅ | runs on the panel by itself, several channels at once, no `0x3D` refresh needed (tested: 2 channels, icons 181–185 and 166–173) |
+| `0x25` cache JPEG to area 1 + `0x26` copy from area 1 | ✅ | cache does not change the screen; copy is opaque (black pixels copied) |
+| `0x27` copy from area 0 (picture shown by `0x22`) | ⚠️ | works, but bit 7 is inverted – see below |
 
 ## Different
 
@@ -38,7 +41,12 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    private/image/0.jpg …       480x272 baseline JPEGs (stored rotated, shown portrait)
    private/truefont/font.ttf   TrueType font, truefont.ini: "[setting] font0=font.ttf"
    ```
-6. **Font.** The stock font is a SimSun subset: monospaced, advance exactly 0.5 em,
+6. **`0x27` bit 7 is inverted.** With mode `0x00` the region is copied opaque (like DWIN with
+   `0x80`). With mode `0x80` black pixels are treated as transparent, so only the non-black parts
+   of the picture are drawn over what is on screen. Petrel's boot screen restore
+   (`copy_cache(0, …, background=True)` → `0x80`) therefore leaves old content behind; sending
+   `0x00` on DACAI fixes it.
+7. **Font.** The stock font is a SimSun subset: monospaced, advance exactly 0.5 em,
    ascent 220/256, descent 36/256. Any replacement must keep 0.5 em advances, otherwise UIs that
    assume fixed 8/10 px cells break (`tools/build_font.py`).
 
@@ -60,5 +68,5 @@ the format.
 ## Unknown / not tested
 
 * Whether `config.txt` can raise the baud rate (would make thumbnails faster).
-* Native icon animation (`0x28`) – Petrel uses it for the boot spinner; harmless if ignored.
+* Whether the panel has a second UART usable as a general serial port (not on the 10-pin header).
 * Exact behaviour of other DACAI firmware revisions.
