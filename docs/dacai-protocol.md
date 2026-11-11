@@ -56,7 +56,13 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    Tested: `0x22` shows it, `0x25`/`0x26` cache + copy work, and it survives a power cycle.
    Limit: one picture ≤ 32 KB (480×272 baseline JPEG at ~80 % quality ≈ 12–25 KB).
    **Icon libraries cannot be written over UART** – the firmware only ever *reads*
-   `3:/icon/<n>.zico`; icons still need the SD card.
+   `3:/icon/<n>.zico`. Workaround that works: put the icons on a JPEG **sprite sheet**, upload it
+   like a picture, load it with `0x25 01 <id>` (wait ~0.5 s for the decode) and copy single icons
+   with `0x26` (opaque) or `0x27` mode `0x81` (black transparent on DACAI). Tested with 32 of
+   Petrel's own icons (`tools/panel-tests/sprite_test.py`, photo `previews/sd-free-icons-test.jpg`):
+   a full screen of tiles and icons is drawn in < 1 s.
+   **JPEG format:** the panel's decoder only accepts **4:2:0 subsampling** – 4:4:4 JPEGs are
+   silently ignored (no picture, no error).
 5. **Artwork format.** `private/` instead of `DWIN_SET/`:
    ```
    private/config.txt          register settings, e.g. "R1=07; 115200"
