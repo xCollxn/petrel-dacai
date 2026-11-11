@@ -1,4 +1,4 @@
-From 81764184fabaa3570729b4c86050472afe22bd16 Mon Sep 17 00:00:00 2001
+From c9793f0d60f5b7e1e3c6ff99569c54c734ced351 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 00:40:58 +0100
 Subject: [PATCH 3/7] configure.sh: DACAI panel option; DACAI guide (EN/TR)
@@ -14,12 +14,12 @@ after a microSD update, limits and the protocol differences.
  docs/README_TR.md        |  1 +
  docs/configuration.md    |  6 +++
  docs/configuration_TR.md |  7 ++++
- docs/dacai.md            | 82 ++++++++++++++++++++++++++++++++++++++++
- docs/dacai_TR.md         | 82 ++++++++++++++++++++++++++++++++++++++++
+ docs/dacai.md            | 83 ++++++++++++++++++++++++++++++++++++++++
+ docs/dacai_TR.md         | 83 ++++++++++++++++++++++++++++++++++++++++
  docs/lcd-assets.md       |  2 +-
  docs/lcd-assets_TR.md    |  2 +-
  tools/configure.py       | 11 ++++--
- 11 files changed, 215 insertions(+), 5 deletions(-)
+ 11 files changed, 217 insertions(+), 5 deletions(-)
  create mode 100644 docs/dacai.md
  create mode 100644 docs/dacai_TR.md
 
@@ -132,10 +132,10 @@ index 4c8111a..b881785 100644
  Enkoder A/B ve düğme GPIO'larını BCM numaralandırmasıyla, harici preset JSON dosyasının
 diff --git a/docs/dacai.md b/docs/dacai.md
 new file mode 100644
-index 0000000..e8c9468
+index 0000000..18f6c7e
 --- /dev/null
 +++ b/docs/dacai.md
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,83 @@
 +# DACAI panels
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Documentation](README.md)
@@ -149,13 +149,14 @@ index 0000000..e8c9468
 +
 +## Panel firmware
 +
-+The reference panel runs the DACAI firmware update `firmware.zlib` (build May 18 2022) that the
-+community distributes for DACAI panels without print previews (e.g. in mriscoc's
-+`dacai_update.zip`). Animations (`0x28`), virtual areas (`0x25`/`0x26`) and the `0x27` bit 7
-+behavior were also verified with the original Ender 3 Max Neo firmware. **Thumbnails (`0x70`),
++The reference panel runs Creality's official Ender 3 Max Neo display firmware: `firmware.zlib`
++(build May 18 2022) from the Creality package `SW-V1.4.1_C` (20 Oct 2022), folder
++`Display Firmware`. Animations (`0x28`), virtual areas (`0x25`/`0x26`) and the `0x27` bit 7
++behavior were also verified with the panel's older factory firmware. **Thumbnails (`0x70`),
 +picture upload (`0x33`), picture IDs above 15 and therefore the icon sprite sheets were only
-+verified after the update.** If icons or thumbnails stay empty on an original panel, install
-+that firmware update from the panel's microSD card first.
++verified with the official firmware.** If icons or thumbnails stay empty, update the panel first:
++copy `firmware.zlib` and the `private` folder from that package to the root of a FAT32 card
++(allocation unit 4096), power the panel with the card inserted and remove the card afterwards.
 +
 +> **⚠️ Never copy a `DWIN_SET` folder to a DACAI panel.** DWIN and DACAI resource packs are not interchangeable.
 +
@@ -220,10 +221,10 @@ index 0000000..e8c9468
 +| `0x39`/`0x3A` | Not implemented | No auxiliary UART |
 diff --git a/docs/dacai_TR.md b/docs/dacai_TR.md
 new file mode 100644
-index 0000000..e4e086b
+index 0000000..5142c16
 --- /dev/null
 +++ b/docs/dacai_TR.md
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,83 @@
 +# DACAI panelleri
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Dokümantasyon](README_TR.md)
@@ -237,13 +238,14 @@ index 0000000..e4e086b
 +
 +## Panel yazılımı
 +
-+Referans panel, baskı önizlemesi olmayan DACAI panelleri için toplulukta dağıtılan DACAI yazılım
-+güncellemesi `firmware.zlib` (derleme 18 Mayıs 2022) ile çalışır (ör. mriscoc'un
-+`dacai_update.zip` paketinde). Animasyonlar (`0x28`), sanal alanlar (`0x25`/`0x26`) ve `0x27`
-+bit 7 davranışı orijinal Ender 3 Max Neo yazılımıyla da doğrulandı. **Önizlemeler (`0x70`),
-+resim yükleme (`0x33`), 15'ten büyük resim ID'leri ve dolayısıyla ikon sprite sayfaları yalnızca
-+güncellemeden sonra doğrulandı.** Orijinal bir panelde ikonlar veya önizlemeler boş kalırsa önce
-+bu yazılım güncellemesini panelin microSD kartından yükleyin.
++Referans panel, Creality'nin resmi Ender 3 Max Neo ekran yazılımıyla çalışır: Creality
++`SW-V1.4.1_C` paketindeki (20 Ekim 2022) `Display Firmware` klasöründe bulunan `firmware.zlib`
++(derleme 18 Mayıs 2022). Animasyonlar (`0x28`), sanal alanlar (`0x25`/`0x26`) ve `0x27` bit 7
++davranışı panelin daha eski fabrika yazılımıyla da doğrulandı. **Önizlemeler (`0x70`), resim
++yükleme (`0x33`), 15'ten büyük resim ID'leri ve dolayısıyla ikon sprite sayfaları yalnızca resmi
++yazılımla doğrulandı.** İkonlar veya önizlemeler boş kalırsa önce paneli güncelleyin: bu paketteki
++`firmware.zlib` dosyasını ve `private` klasörünü FAT32 bir kartın köküne kopyalayın (ayırma birimi
++4096), kart takılıyken panele güç verin ve ardından kartı çıkarın.
 +
 +> **⚠️ Bir DACAI paneline asla `DWIN_SET` klasörü kopyalamayın.** DWIN ve DACAI kaynak paketleri birbirinin yerine kullanılamaz.
 +

@@ -36,13 +36,14 @@ Hier liegt alles, was nötig war, damit Petrel auf einem DACAI-Display richtig l
 | Klipper / Moonraker / Mainsail | v0.13.0-745 / v0.11.0 / 2.19 |
 | Raspberry Pi | Pi 5, Debian 13 (Raspberry Pi OS), UART `/dev/ttyAMA0` |
 | Drucker / Display | Ender-3 Max Neo (Creality 4.2.2), DACAI-4,3"-Display mit Drehknopf |
-| **Display-Firmware** | **DACAI `firmware.zlib`, Build 18.05.2022** (Community-Update aus mriscocs `dacai_update.zip`), nicht die Original-Max-Neo-Firmware – siehe unten |
+| **Display-Firmware** | **Offizielle Max-Neo-Display-Firmware von Creality**: `firmware.zlib` (Build 18.05.2022) aus dem Creality-Paket `SW-V1.4.1_C` (20.10.2022) – siehe unten |
 
 > **Die Display-Firmware ist wichtig.** Vorschaubilder (`0x70`), Bild-Upload über das Kabel und
-> damit die Icons ohne SD-Karte wurden erst **nach** diesem Firmware-Update getestet. Animationen,
-> Zwischenspeicher-Bereiche und der `0x27`-Fix gingen auch mit der Original-Firmware. Bleiben
-> Icons oder Vorschaubilder leer, zuerst das Firmware-Update per microSD aufspielen
-> ([`docs/sd-update.md`](docs/sd-update.md)) – und gern das Ergebnis melden.
+> damit die Icons ohne SD-Karte wurden erst **mit dieser offiziellen Firmware** getestet; vorher
+> war eine ältere Werks-Firmware drauf. Animationen, Zwischenspeicher-Bereiche und der
+> `0x27`-Fix gingen auch mit der Werks-Firmware. Bleiben Icons oder Vorschaubilder leer, zuerst
+> Crealitys Display-Firmware per microSD aufspielen ([`docs/sd-update.md`](docs/sd-update.md)) –
+> und gern das Ergebnis melden.
 
 Die Patches sind genau für diesen Petrel-Stand gemacht – die Installationsschritte holen ihn
 gezielt. Bei neueren Petrel-Versionen müssen die Patches eventuell angepasst werden.
