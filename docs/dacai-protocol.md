@@ -99,8 +99,9 @@ Send `0x38`, switch the host port, then handshake. A host that restarts must pro
 
 ## Opcodes handled by the firmware
 
-From the command dispatcher of the DACAI firmware (`firmware.zlib` from mriscoc's
-`dacai_update.zip`, build May 18 2022, dispatcher at `0x80048b60`, load address `0x80000000`):
+From the command dispatcher of the DACAI firmware (`firmware.zlib`, build May 18 2022 – Creality's
+official Max Neo display firmware from package `SW-V1.4.1_C`, the same file as in mriscoc's
+`dacai_update.zip`; dispatcher at `0x80048b60`, load address `0x80000000`):
 
 `00 01 02 03 05 09 11 14 20 21 22 23 25 26 27 28 29 30 31 32 33 38 3D 70`
 
