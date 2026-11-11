@@ -107,10 +107,10 @@ index 4c8111a..b881785 100644
  Enkoder A/B ve düğme GPIO'larını BCM numaralandırmasıyla, harici preset JSON dosyasının
 diff --git a/docs/dacai.md b/docs/dacai.md
 new file mode 100644
-index 0000000..18f6c7e
+index 0000000..56e8fe1
 --- /dev/null
 +++ b/docs/dacai.md
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,105 @@
 +# DACAI panels
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Documentation](README.md)
@@ -179,6 +179,28 @@ index 0000000..18f6c7e
 +- **Black is transparent:** like DWIN icon drawing, transparent icons treat near-black pixels as background, so very thin dark details can disappear.
 +- **Emulator:** screenshots show the DWIN rendering path.
 +
++## For developers
++
++`DacaiDriver` (`petrel/hardware/dwin/dacai.py`) subclasses `T5UIC1Display`; the DWIN path stays
++unchanged. Keep these points in mind when changing display code:
++
++- **Draw through the driver methods.** `show_icon`, `configure_animation`, `set_animation_mask`,
++  `copy_cache`, `show_sram_jpeg`, `set_backlight` and `prepare_picture` are overridden. Code that
++  sends raw opcodes with `_send` bypasses the DACAI handling.
++- **Icons need no extra work.** Sprite sheets are built from `assets/icons` at runtime
++  (`petrel/artwork/sprites.py`); new or changed icons are uploaded on the next start. Icon IDs
++  in `sprites.SKIPPED_IDS` (the large NFC frames) are not uploaded.
++- **Animations** of library 2 are stepped by the host (`poll_host_animations`, called from the UI
++  tick). The interval keeps the `0x28` unit of 10 ms; the shortest frame time is 40 ms.
++- **Reserved resources:** pictures 0 (boot), 1 (shared artwork) and 16 and up (sprite sheets);
++  Data Flash `0x0600`–`0x083F` (sprite checkpoints) in addition to the DWIN records.
++- **Not available on DACAI:** `0x24` (use `show_sram_jpeg`), `0x39`/`0x3A` (no auxiliary UART),
++  writing icon files. A new opcode may need an override in `DacaiDriver`; see the table below.
++- **New artwork in pictures:** pass JPEG bytes through `lcd.prepare_picture()` before
++  `write_sram` + `store_sram_as_picture` (baseline 4:2:0, at most 32,764 bytes on DACAI).
++- **Tests:** `tests/test_dacai_panel.py` covers the protocol differences, sprite packing/sync and
++  host animations.
++
 +## Differences from DWIN T5UIC1
 +
 +Measured on the reference panel (Ender 3 Max Neo, board Rev 1.5). The driver is `petrel/hardware/dwin/dacai.py`.
@@ -196,10 +218,10 @@ index 0000000..18f6c7e
 +| `0x39`/`0x3A` | Not implemented | No auxiliary UART |
 diff --git a/docs/dacai_TR.md b/docs/dacai_TR.md
 new file mode 100644
-index 0000000..5142c16
+index 0000000..0db068f
 --- /dev/null
 +++ b/docs/dacai_TR.md
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,106 @@
 +# DACAI panelleri
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Dokümantasyon](README_TR.md)
@@ -267,6 +289,29 @@ index 0000000..5142c16
 +- **Yardımcı UART yok:** Panelde ikinci bir UART bulunmaz; bu nedenle [DWIN yardımcı UART](dwin-uart_TR.md) ve ekrana bağlanan NFC okuyucular kullanılamaz. Büyük NFC yaklaşma animasyonları yüklenmez.
 +- **Siyah saydamdır:** DWIN ikon çiziminde olduğu gibi saydam ikonlarda siyaha yakın pikseller arka plan sayılır; çok ince koyu ayrıntılar kaybolabilir.
 +- **Emülatör:** Ekran görüntüleri DWIN çizim yolunu gösterir.
++
++## Geliştiriciler için
++
++`DacaiDriver` (`petrel/hardware/dwin/dacai.py`), `T5UIC1Display` sınıfından türetilir; DWIN yolu
++değişmeden kalır. Ekran kodunu değiştirirken şu noktalara dikkat edin:
++
++- **Çizimleri sürücü metotları üzerinden yapın.** `show_icon`, `configure_animation`,
++  `set_animation_mask`, `copy_cache`, `show_sram_jpeg`, `set_backlight` ve `prepare_picture`
++  yeniden tanımlanmıştır. Ham opcode'ları `_send` ile gönderen kod DACAI işlemesini atlar.
++- **İkonlar için ek iş gerekmez.** Sprite sayfaları çalışma anında `assets/icons` klasöründen
++  oluşturulur (`petrel/artwork/sprites.py`); yeni veya değişen ikonlar bir sonraki açılışta
++  yüklenir. `sprites.SKIPPED_IDS` içindeki ikon ID'leri (büyük NFC kareleri) yüklenmez.
++- **Kütüphane 2 animasyonları** host tarafından ilerletilir (`poll_host_animations`, arayüz
++  tick'inden çağrılır). Aralık `0x28` birimini (10 ms) korur; en kısa kare süresi 40 ms'dir.
++- **Ayrılmış kaynaklar:** resim 0 (açılış), 1 (ortak görsel) ve 16 ve üzeri (sprite sayfaları);
++  DWIN kayıtlarına ek olarak Data Flash `0x0600`–`0x083F` (sprite kontrol kayıtları).
++- **DACAI'de bulunmayanlar:** `0x24` (`show_sram_jpeg` kullanın), `0x39`/`0x3A` (yardımcı UART
++  yok), ikon dosyası yazma. Yeni bir opcode için `DacaiDriver` içinde yeniden tanımlama
++  gerekebilir; aşağıdaki tabloya bakın.
++- **Resimlere yeni görsel:** JPEG baytlarını `write_sram` + `store_sram_as_picture` öncesinde
++  `lcd.prepare_picture()` üzerinden geçirin (baseline 4:2:0, DACAI'de en fazla 32.764 bayt).
++- **Testler:** `tests/test_dacai_panel.py` protokol farklarını, sprite yerleşimini/senkronunu ve
++  host animasyonlarını kapsar.
 +
 +## DWIN T5UIC1'den farklar
 +

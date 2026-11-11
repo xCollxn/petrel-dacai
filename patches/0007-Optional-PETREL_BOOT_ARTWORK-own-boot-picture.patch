@@ -1,4 +1,4 @@
-From 23cd61c498e72bd9d9255f6801ccea83cd833b3e Mon Sep 17 00:00:00 2001
+From 6b582cbcee63df354da0f98552b7c6a719281f28 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 00:42:06 +0100
 Subject: [PATCH 7/7] Optional PETREL_BOOT_ARTWORK: own boot picture

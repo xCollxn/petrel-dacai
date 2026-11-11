@@ -1,4 +1,4 @@
-From 0deaa7507d9e7d382c66a2c19f50a2b5e81e09c8 Mon Sep 17 00:00:00 2001
+From d70cbda4386ed6d55a872c4d2d00af29813d8d97 Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
 Subject: [PATCH 5/7] Optional PETREL_DARK_WHEN_PRINTER_OFF: backlight off
