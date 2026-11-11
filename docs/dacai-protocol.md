@@ -19,7 +19,7 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
 | `0x09` move area (scroll) | ✅ | mode 1 (translate) + fill colour as on DWIN |
 | `0x14` native number | ✅ | |
 | `0x21` QR code | ✅ | |
-| `0x30` backlight levels | ⚠️ | levels work, but the range is small (0x10…0xFF only "a bit darker") |
+| `0x30` backlight | ✅ | **range 0–63** (firmware clamps everything ≥ 63 to 100 %); 0 = off, 2–4 is the darkest usable level |
 | `0x28` / `0x29` native icon animation | ✅ | runs on the panel by itself, several channels at once, no `0x3D` refresh needed (tested: 2 channels, icons 181–185 and 166–173) |
 | `0x25` cache JPEG to area 1 + `0x26` copy from area 1 | ✅ | cache does not change the screen; copy is opaque (black pixels copied) |
 | `0x27` copy from area 0 (picture shown by `0x22`) | ⚠️ | works, but bit 7 is inverted – see below |
@@ -78,6 +78,24 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
 7. **Font.** The stock font is a SimSun subset: monospaced, advance exactly 0.5 em,
    ascent 220/256, descent 36/256. Any replacement must keep 0.5 em advances, otherwise UIs that
    assume fixed 8/10 px cells break (`tools/build_font.py`).
+
+## Faster host link: `0x38`
+
+On DWIN `0x38 <divisor:u16>` sets the *extended* UART to 15667200 / divisor baud. DACAI has no
+extended UART – the same command **re-clocks the host UART (UART2)** (firmware: stores the baud and
+re-initialises UART 2). The new speed stays until the panel loses power.
+
+| Baud (divisor) | 8 KB SRAM write | errors (write + read-back) |
+|---|---|---|
+| 115200 (136) | ~0.75 s | – |
+| 230400 (68) | 0.37 s | 0 |
+| 460800 (34) | 0.19 s | 0 |
+| 921600 (17) | 0.10 s | 0 |
+
+Floods of 3000 rectangles or several full menu screens at 460800/921600 were processed without loss;
+the panel needs ~0.3 s per full menu screen to draw, so the gain is mostly for SRAM/picture uploads.
+Send `0x38`, switch the host port, then handshake. A host that restarts must probe both speeds
+(the panel keeps the raised one) – patch 0008 does that.
 
 ## Opcodes handled by the firmware
 

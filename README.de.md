@@ -22,7 +22,7 @@ Hier liegt alles, was nötig war, damit Petrel auf einem DACAI-Display richtig l
 
 | | Was | Wo |
 |---|---|---|
-| 🔧 | 7 kleine Patches für Petrel (jeder per Schalter in `Petrel.env`) | [`patches/`](patches/) |
+| 🔧 | 8 kleine Patches für Petrel (jeder per Schalter in `Petrel.env`) | [`patches/`](patches/) |
 | 🖼️ | Fertiges SD-Karten-Paket: 189 Icons (74 im gefüllten Farbstil neu gezeichnet + 3 neue), neutrales Startbild, klare Monospace-Schrift | [`sd-overlay/`](sd-overlay/) |
 | 🧰 | Werkzeuge: DWIN oder DACAI erkennen, Icon-Bibliothek (ZICO) bauen, Schrift bauen, Startbild rendern, SD-Ordner zusammenstellen | [`tools/`](tools/) |
 | 📖 | Was DACAI anders macht – soweit bekannt erstmals dokumentiert | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |

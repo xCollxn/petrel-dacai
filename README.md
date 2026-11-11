@@ -22,7 +22,7 @@ This project contains everything that was needed to make Petrel work properly on
 
 | | What | Where |
 |---|---|---|
-| 🔧 | 7 small patches for Petrel (each one switchable in `Petrel.env`) | [`patches/`](patches/) |
+| 🔧 | 8 small patches for Petrel (each one switchable in `Petrel.env`) | [`patches/`](patches/) |
 | 🖼️ | A ready-made microSD overlay: 189 icons (74 redrawn in a filled colour style + 3 new), a neutral boot image, a crisp monospace font | [`sd-overlay/`](sd-overlay/) |
 | 🧰 | Tools: detect DWIN vs. DACAI, build icon libraries (ZICO), build fonts, render boot images, assemble the SD folder | [`tools/`](tools/) |
 | 📖 | What DACAI does differently – documented for the first time as far as we know | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
@@ -116,8 +116,9 @@ Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`]
 | 0005 | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while Klipper reports the printer board unreachable; the knob wakes it for 10 s |
 | 0006 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
 | 0007 | `PETREL_DACAI=1` (+ `PETREL_DACAI_PICTURE_UPLOAD=1`, `PETREL_BOOT_ARTWORK=…`) | Thumbnails with DACAI's own `0x70` (≈3× faster than rectangles), `0x27` bit 7 fix, and boot / shared pictures uploaded over UART (padded to 32 KB) – icons still come from the SD card |
+| 0008 | `PETREL_DACAI=1`, `PETREL_DACAI_BAUD=460800` | Brightness slider uses DACAI's real range (0–63), and the host link runs 4× faster (`0x38` re-clocks the panel UART; automatic fallback to 115200) |
 
-`patches/petrel-dacai-all.patch` contains all seven as one diff.
+`patches/petrel-dacai-all.patch` contains all eight as one diff.
 
 ## ★ Optional add-ons
 
