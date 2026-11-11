@@ -15,11 +15,20 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
 | `0x22` show JPEG from flash, area copy from picture 1 | ✅ | pictures come from `private/image/N.jpg` |
 | `0x30` backlight | ✅ | 0 = dark |
 | `0x32` read SRAM / data flash | ✅ | framed answer as on DWIN |
+| `0x02` points | ✅ | small points look like outlined squares at 4×4 |
+| `0x09` move area (scroll) | ✅ | mode 1 (translate) + fill colour as on DWIN |
+| `0x14` native number | ✅ | |
+| `0x21` QR code | ✅ | |
+| `0x30` backlight levels | ⚠️ | levels work, but the range is small (0x10…0xFF only "a bit darker") |
 | `0x28` / `0x29` native icon animation | ✅ | runs on the panel by itself, several channels at once, no `0x3D` refresh needed (tested: 2 channels, icons 181–185 and 166–173) |
 | `0x25` cache JPEG to area 1 + `0x26` copy from area 1 | ✅ | cache does not change the screen; copy is opaque (black pixels copied) |
 | `0x27` copy from area 0 (picture shown by `0x22`) | ⚠️ | works, but bit 7 is inverted – see below |
 
 ## Different
+
+* **`0x03` polyline: only horizontal/vertical.** Diagonal segments are drawn as an L-shaped
+  step (horizontal + vertical). Horizontal and vertical lines are fine.
+* **`0x08` bitmap and `0x2A` EAN-13: nothing is drawn.** (Petrel does not use them.)
 
 1. **Drawing needs `0x3D` (update).** Drawing commands only become visible after
    `AA 3D CC 33 C3 3C`. (Petrel sends it anyway; your own test scripts must too.)
