@@ -1,4 +1,4 @@
-From 8f99ed5c414e19f57dc3683fe67ed464ca18cd3b Mon Sep 17 00:00:00 2001
+From 81764184fabaa3570729b4c86050472afe22bd16 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 00:40:58 +0100
 Subject: [PATCH 3/7] configure.sh: DACAI panel option; DACAI guide (EN/TR)
@@ -8,18 +8,18 @@ speed (PETREL_DACAI_BAUD: 115200/230400/460800/921600). docs/dacai.md and
 docs/dacai_TR.md describe recognition, setup, uploaded pictures, recovery
 after a microSD update, limits and the protocol differences.
 ---
- Kconfig                  | 21 ++++++++++++
+ Kconfig                  | 21 ++++++++++
  Petrel.env.example       |  5 +++
  docs/README.md           |  1 +
  docs/README_TR.md        |  1 +
- docs/configuration.md    |  6 ++++
+ docs/configuration.md    |  6 +++
  docs/configuration_TR.md |  7 ++++
- docs/dacai.md            | 72 ++++++++++++++++++++++++++++++++++++++++
- docs/dacai_TR.md         | 72 ++++++++++++++++++++++++++++++++++++++++
+ docs/dacai.md            | 82 ++++++++++++++++++++++++++++++++++++++++
+ docs/dacai_TR.md         | 82 ++++++++++++++++++++++++++++++++++++++++
  docs/lcd-assets.md       |  2 +-
  docs/lcd-assets_TR.md    |  2 +-
  tools/configure.py       | 11 ++++--
- 11 files changed, 195 insertions(+), 5 deletions(-)
+ 11 files changed, 215 insertions(+), 5 deletions(-)
  create mode 100644 docs/dacai.md
  create mode 100644 docs/dacai_TR.md
 
@@ -132,10 +132,10 @@ index 4c8111a..b881785 100644
  Enkoder A/B ve düğme GPIO'larını BCM numaralandırmasıyla, harici preset JSON dosyasının
 diff --git a/docs/dacai.md b/docs/dacai.md
 new file mode 100644
-index 0000000..c5287dc
+index 0000000..e8c9468
 --- /dev/null
 +++ b/docs/dacai.md
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,82 @@
 +# DACAI panels
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Documentation](README.md)
@@ -146,6 +146,16 @@ index 0000000..c5287dc
 +
 +- The panel's microSD update folder is named **`private`** (with `icon/`, `image/`, `truefont/`, `config.txt`) instead of `DWIN_SET`.
 +- The board carries an **Allwinner F1C100s** processor and often a 大彩 sticker.
++
++## Panel firmware
++
++The reference panel runs the DACAI firmware update `firmware.zlib` (build May 18 2022) that the
++community distributes for DACAI panels without print previews (e.g. in mriscoc's
++`dacai_update.zip`). Animations (`0x28`), virtual areas (`0x25`/`0x26`) and the `0x27` bit 7
++behavior were also verified with the original Ender 3 Max Neo firmware. **Thumbnails (`0x70`),
++picture upload (`0x33`), picture IDs above 15 and therefore the icon sprite sheets were only
++verified after the update.** If icons or thumbnails stay empty on an original panel, install
++that firmware update from the panel's microSD card first.
 +
 +> **⚠️ Never copy a `DWIN_SET` folder to a DACAI panel.** DWIN and DACAI resource packs are not interchangeable.
 +
@@ -210,10 +220,10 @@ index 0000000..c5287dc
 +| `0x39`/`0x3A` | Not implemented | No auxiliary UART |
 diff --git a/docs/dacai_TR.md b/docs/dacai_TR.md
 new file mode 100644
-index 0000000..e75dbdc
+index 0000000..e4e086b
 --- /dev/null
 +++ b/docs/dacai_TR.md
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,82 @@
 +# DACAI panelleri
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Dokümantasyon](README_TR.md)
@@ -224,6 +234,16 @@ index 0000000..e75dbdc
 +
 +- Panelin microSD güncelleme klasörünün adı `DWIN_SET` değil, **`private`**'tır (`icon/`, `image/`, `truefont/`, `config.txt` içerir).
 +- Kartta bir **Allwinner F1C100s** işlemci ve çoğu zaman 大彩 etiketi bulunur.
++
++## Panel yazılımı
++
++Referans panel, baskı önizlemesi olmayan DACAI panelleri için toplulukta dağıtılan DACAI yazılım
++güncellemesi `firmware.zlib` (derleme 18 Mayıs 2022) ile çalışır (ör. mriscoc'un
++`dacai_update.zip` paketinde). Animasyonlar (`0x28`), sanal alanlar (`0x25`/`0x26`) ve `0x27`
++bit 7 davranışı orijinal Ender 3 Max Neo yazılımıyla da doğrulandı. **Önizlemeler (`0x70`),
++resim yükleme (`0x33`), 15'ten büyük resim ID'leri ve dolayısıyla ikon sprite sayfaları yalnızca
++güncellemeden sonra doğrulandı.** Orijinal bir panelde ikonlar veya önizlemeler boş kalırsa önce
++bu yazılım güncellemesini panelin microSD kartından yükleyin.
 +
 +> **⚠️ Bir DACAI paneline asla `DWIN_SET` klasörü kopyalamayın.** DWIN ve DACAI kaynak paketleri birbirinin yerine kullanılamaz.
 +

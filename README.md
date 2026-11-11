@@ -36,6 +36,13 @@ This project contains everything that was needed to make Petrel work properly on
 | Klipper / Moonraker / Mainsail | v0.13.0-745 / v0.11.0 / 2.19 |
 | Raspberry Pi | Pi 5, Debian 13 (Raspberry Pi OS), UART `/dev/ttyAMA0` |
 | Printer / screen | Ender-3 Max Neo (Creality 4.2.2), DACAI 4.3" knob screen |
+| **Screen firmware** | **DACAI `firmware.zlib` build May 18 2022** (community update from mriscoc's `dacai_update.zip`), not the original Max Neo firmware – see below |
+
+> **Screen firmware matters.** Thumbnails (`0x70`), picture upload over UART and therefore the
+> SD-free icons were only verified **after** that firmware update. Animations, virtual areas and
+> the `0x27` fix also worked on the original firmware. If icons or thumbnails stay empty on your
+> screen, install the firmware update from the screen's microSD card first (see
+> [`docs/sd-update.md`](docs/sd-update.md)) – and please report your result.
 
 The patches are made for exactly this Petrel commit – the install steps check it out
 explicitly. Newer Petrel versions may need the patches to be rebased (see

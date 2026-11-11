@@ -47,6 +47,14 @@ What gets replaced: `icon/2.zico` (Petrel icon library), `image/0.jpg` (boot ima
    Petrel's sprite sheets take precedence over icons from the card; icons Petrel does not have
    (e.g. 186–188 of patch 0006) still come from the card.
 
+## Screen firmware update (`firmware.zlib`)
+
+The reference screen runs the DACAI firmware update `firmware.zlib` (build May 18 2022, from
+[mriscoc's `dacai_update.zip`](https://github.com/mriscoc/Ender3V2S1/tree/Ender3V2S1-Bugfix/display%20assets)).
+Thumbnails and the SD-free icons were only verified with it. To install it, put `firmware.zlib`
+next to the `private` folder on the card and flash as above; the screen shows
+"Upgrading firmware". There is no way back to the original firmware unless you have a copy of it.
+
 ## Back to stock
 
 Same procedure with your untouched stock `private` folder.
