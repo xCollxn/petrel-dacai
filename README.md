@@ -121,13 +121,14 @@ Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`]
 | 0001 | – | Small extension points in Petrel's DWIN driver; no change for DWIN screens |
 | 0002 | `PETREL_DACAI=1`, `PETREL_DACAI_BAUD` | **`DacaiDriver`**: thumbnails with DACAI's `0x70`, `0x27` bit 7 fix, pictures padded to 32 KB, **icons as JPEG sprite sheets over UART** (pictures 16+, drawn with `0x25` + `0x27`), animations from the Pi, bare `A5 OK` flash ACK, brightness 0–63, faster host link via `0x38`; `tools/dacai_artwork.py` re-uploads after an SD update |
 | 0003 | – | `configure.sh` menu *Display panel* and Petrel's own `docs/dacai.md` (EN/TR) |
-| 0004 | `PETREL_HIDE_QR=1` | Hides the project QR code on the Info page |
-| 0005 | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while Klipper reports the printer board unreachable; the knob wakes it for 10 s |
-| 0006 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
-| 0007 | `PETREL_BOOT_ARTWORK=…` | Own boot picture, uploaded over UART |
+| 0004 | `PETREL_DACAI=1` | Print previews composed on the UI background instead of black (DACAI's `0x70` draws opaque) – no black square, only a thin JPEG colour fringe at model edges |
+| 0005 | `PETREL_HIDE_QR=1` | Hides the project QR code on the Info page |
+| 0006 | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while Klipper reports the printer board unreachable; the knob wakes it for 10 s |
+| 0007 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
+| 0008 | `PETREL_BOOT_ARTWORK=…` | Own boot picture, uploaded over UART |
 
-0001–0003 are the part proposed to Petrel upstream. `patches/petrel-dacai-all.patch` contains
-all seven as one diff. The previous SD-based series is kept in
+0001–0004 are the part proposed to Petrel upstream. `patches/petrel-dacai-all.patch` contains
+all eight as one diff. The previous SD-based series is kept in
 [`patches/legacy-764d406-sd/`](patches/legacy-764d406-sd/).
 
 ## ★ Optional add-ons
@@ -137,7 +138,7 @@ None of these is needed for the screen to work.
 | ★ Add-on | You need | What it does |
 |---|---|---|
 | **Autostart via Home Assistant** | Home Assistant, the Moonraker integration and a smart plug that **measures** the printer's power | When you switch the printer on, Klipper normally stays in `Lost communication with MCU` until someone sends `FIRMWARE_RESTART`. The automation sends it as soon as the printer draws power – switch on, wait ~20 s, ready. → [`examples/home-assistant/`](examples/home-assistant/) |
-| **Own boot image** | nothing extra | `tools/make_boot.py --title "My Printer" --info "220 × 220 × 250 mm" my_boot.jpg`, then set `PETREL_BOOT_ARTWORK=/path/my_boot.jpg` (patch 0007) – uploaded over UART |
+| **Own boot image** | nothing extra | `tools/make_boot.py --title "My Printer" --info "220 × 220 × 250 mm" my_boot.jpg`, then set `PETREL_BOOT_ARTWORK=/path/my_boot.jpg` (patch 0008) – uploaded over UART |
 | **Own font / redrawn icons** | microSD card, Python with Pillow (+ fonttools for the font) | SD overlay, see [`docs/sd-update.md`](docs/sd-update.md) and [AGENTS.md](AGENTS.md#practical-notes-for-agents) |
 
 Without the Home Assistant add-on you simply send `FIRMWARE_RESTART` from Mainsail/Fluidd (or

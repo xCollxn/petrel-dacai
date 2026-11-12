@@ -1,7 +1,7 @@
 From c9c3b3e2fa703fa34a4b405191a939e3b24e6719 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 00:40:58 +0100
-Subject: [PATCH 2/7] Add DacaiDriver for Creality DACAI panels (e.g. Ender 3
+Subject: [PATCH 2/8] Add DacaiDriver for Creality DACAI panels (e.g. Ender 3
  Max Neo)
 
 DACAI panels emulate most of the T5UIC1 protocol. DacaiDriver handles the

@@ -108,7 +108,7 @@ Für die Grundfunktion brauchst du nur Pi, Display und Kabel. Alles mit ★ ist 
 | ★ Add-on | Du brauchst | Was es macht |
 |---|---|---|
 | **Autostart über Home Assistant** | Home Assistant, die Moonraker-Integration und eine Steckdose, die den Strom **misst** | Drucker einschalten → Home Assistant schickt `FIRMWARE_RESTART` → nach ~20 s bereit. Ohne Add-on: `FIRMWARE_RESTART` wie gewohnt in Mainsail/Fluidd. → [`examples/home-assistant/`](examples/home-assistant/) |
-| **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann `PETREL_BOOT_ARTWORK=/pfad/mein_boot.jpg` (Patch 0007) – geht über das Kabel |
+| **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann `PETREL_BOOT_ARTWORK=/pfad/mein_boot.jpg` (Patch 0008) – geht über das Kabel |
 | **Eigene Schrift / neu gezeichnete Icons** | SD-Karte, Python mit Pillow (+ fonttools) | SD-Paket, siehe [`docs/sd-update.md`](docs/sd-update.md) |
 
 Das Dunkelschalten des Displays bei ausgeschaltetem Drucker braucht **keinen** Strommesser – Petrel erkennt das direkt an Klipper.

@@ -1,0 +1,148 @@
+From 855ddc961b12424bac65372a8f5702abf29ce0dc Mon Sep 17 00:00:00 2001
+From: xCollxn <81695022+xCollxn@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 02:12:31 +0100
+Subject: [PATCH 4/8] DACAI: compose thumbnails on the UI background
+
+0x70 draws SRAM JPEGs opaque, so the black backing that 0x24 filters away on
+DWIN stayed visible as a black square around every print preview. On DACAI,
+thumbnails are composed on the UI background (file preview) or on the print
+tile artwork with background-coloured corners. The colour is the centre of
+its RGB565 step, so JPEG rounding still decodes to the exact UI colour, and
+quality 100 keeps the 4:2:0 colour fringe within 2 px of model edges.
+---
+ docs/dacai.md                              |  3 ++-
+ docs/dacai_TR.md                           |  3 ++-
+ petrel/features/files/thumbnail_preview.py | 31 ++++++++++++++++++++--
+ tests/test_dacai_panel.py                  | 23 ++++++++++++++++
+ 4 files changed, 56 insertions(+), 4 deletions(-)
+
+diff --git a/docs/dacai.md b/docs/dacai.md
+index 56e8fe1..fbb2c4b 100644
+--- a/docs/dacai.md
++++ b/docs/dacai.md
+@@ -64,6 +64,7 @@ Use the UART from your configuration instead of `/dev/ttyS0`.
+ - **Font:** text uses the TrueType font installed on the panel (`private/truefont`). Petrel does not upload fonts.
+ - **No auxiliary UART:** the panel has no second UART, so [DWIN auxiliary UART](dwin-uart.md) and NFC readers attached to the display cannot be used. The large NFC approach animations are not uploaded.
+ - **Black is transparent:** like DWIN icon drawing, transparent icons treat near-black pixels as background, so very thin dark details can disappear.
++- **Thumbnails are opaque:** `0x70` cannot filter the black backing like `0x24`, so Petrel composes print previews on the UI background (or the print tile) instead. The panel decodes only 4:2:0 JPEGs, so a thin colour fringe of up to 2 px can remain at model edges.
+ - **Emulator:** screenshots show the DWIN rendering path.
+ 
+ ## For developers
+@@ -94,7 +95,7 @@ Measured on the reference panel (Ender 3 Max Neo, board Rev 1.5). The driver is
+ 
+ | Command | DACAI behavior | Driver |
+ |---|---|---|
+-| `0x24` SRAM JPEG | Not implemented | Uses DACAI `0x70 x y address` |
++| `0x24` SRAM JPEG | Not implemented; DACAI `0x70 x y address` draws opaque | Uses `0x70`; thumbnails composed on the UI background at the centre of its RGB565 step, JPEG quality 100 |
+ | `0x27` copy area | Bit 7 inverted: set = black transparent | Inverts bit 7 |
+ | `0x33` SRAM → picture | Stores all 32 KB as `image/<id>.jpg`; the file must end with `FF D9`; IDs above 15 accepted | Pads JPEGs to 32 KB with a COM segment |
+ | Icon library | Icon files cannot be written over UART | Sprite sheets + `0x25`/`0x27` |
+diff --git a/docs/dacai_TR.md b/docs/dacai_TR.md
+index 0db068f..fc8714e 100644
+--- a/docs/dacai_TR.md
++++ b/docs/dacai_TR.md
+@@ -64,6 +64,7 @@ sudo systemctl start Petrel.service
+ - **Yazı tipi:** Metinler panelde kurulu TrueType yazı tipini (`private/truefont`) kullanır. Petrel yazı tipi yüklemez.
+ - **Yardımcı UART yok:** Panelde ikinci bir UART bulunmaz; bu nedenle [DWIN yardımcı UART](dwin-uart_TR.md) ve ekrana bağlanan NFC okuyucular kullanılamaz. Büyük NFC yaklaşma animasyonları yüklenmez.
+ - **Siyah saydamdır:** DWIN ikon çiziminde olduğu gibi saydam ikonlarda siyaha yakın pikseller arka plan sayılır; çok ince koyu ayrıntılar kaybolabilir.
++- **Önizlemeler opaktır:** `0x70`, siyah zemini `0x24` gibi filtreleyemez; bu yüzden Petrel baskı önizlemelerini siyah yerine arayüz arka planına (veya baskı kutucuğuna) yerleştirir. Panel yalnızca 4:2:0 JPEG çözdüğü için model kenarlarında en fazla 2 piksellik ince bir renk saçağı kalabilir.
+ - **Emülatör:** Ekran görüntüleri DWIN çizim yolunu gösterir.
+ 
+ ## Geliştiriciler için
+@@ -95,7 +96,7 @@ Referans panelde (Ender 3 Max Neo, kart Rev 1.5) ölçülmüştür. Sürücü `p
+ 
+ | Komut | DACAI davranışı | Sürücü |
+ |---|---|---|
+-| `0x24` SRAM JPEG | Uygulanmamış | DACAI `0x70 x y adres` komutunu kullanır |
++| `0x24` SRAM JPEG | Uygulanmamış; DACAI `0x70 x y adres` opak çizer | `0x70` kullanır; önizlemeler arayüz arka planına, RGB565 basamağının ortasında, JPEG kalitesi 100 ile yerleştirilir |
+ | `0x27` alan kopyalama | Bit 7 ters: ayarlı = siyah saydam | Bit 7'yi tersine çevirir |
+ | `0x33` SRAM → resim | 32 KB'nin tamamını `image/<id>.jpg` olarak saklar; dosya `FF D9` ile bitmelidir; 15'ten büyük ID'ler kabul edilir | JPEG'leri COM segmentiyle 32 KB'ye tamamlar |
+ | İkon kütüphanesi | İkon dosyaları UART üzerinden yazılamaz | Sprite sayfaları + `0x25`/`0x27` |
+diff --git a/petrel/features/files/thumbnail_preview.py b/petrel/features/files/thumbnail_preview.py
+index 67a1bf2..1a42eae 100644
+--- a/petrel/features/files/thumbnail_preview.py
++++ b/petrel/features/files/thumbnail_preview.py
+@@ -34,6 +34,30 @@ def _protect_dark_foreground(rgba):
+     return protected
+ 
+ 
++def _opaque_canvas(size):
++    """DACAI draws SRAM JPEGs opaque (0x70), so black backing would stay visible.
++
++    Compose the picture on what is behind it instead: the UI background, or for
++    the 88 px print tile the tile artwork itself with background-coloured corners.
++    """
++    from petrel.ui.theme import BACKGROUND_COLOR
++    # Centre of the RGB565 step: small JPEG errors still decode to the exact UI colour.
++    background = ((BACKGROUND_COLOR >> 11) * 8 + 4, ((BACKGROUND_COLOR >> 5) & 63) * 4 + 2,
++                  (BACKGROUND_COLOR & 31) * 8 + 4)
++    if size == 88:
++        from petrel.artwork.icon_library import SOURCE_DIRECTORY
++        from petrel.artwork.resources import ICON_PREVIEW_BACKING
++        try:
++            with Image.open(SOURCE_DIRECTORY / f'{ICON_PREVIEW_BACKING:03d}.jpg') as tile:
++                tile = tile.convert('RGB')
++            if tile.size == (size, size):
++                tile.putdata([background if max(pixel) < 24 else pixel for pixel in tile.getdata()])
++                return tile
++        except OSError:
++            pass
++    return Image.new('RGB', (size, size), background)
++
++
+ def image_jpeg(data, size=128):
+     """Reserve black backing for filtered drawing, protecting dark model details."""
+     if size not in (88, 128):
+@@ -43,10 +67,13 @@ def image_jpeg(data, size=128):
+             raise ValueError('Thumbnail too large')
+         source.thumbnail((size, size), Image.Resampling.LANCZOS)
+         rgba = _protect_dark_foreground(source.convert('RGBA'))
+-        canvas = Image.new('RGB', (size, size), 'black')
++        from petrel.hardware.dwin import dacai
++        opaque = dacai.enabled()
++        canvas = _opaque_canvas(size) if opaque else Image.new('RGB', (size, size), 'black')
+         canvas.paste(rgba, ((size-rgba.width)//2, (size-rgba.height)//2), rgba)
+     output = BytesIO()
+-    canvas.save(output, format='JPEG', quality=94, subsampling=2,
++    # DACAI decodes 4:2:0 only; maximum quality keeps the colour fringe at model edges small.
++    canvas.save(output, format='JPEG', quality=100 if opaque else 94, subsampling=2,
+                 progressive=False, optimize=False)
+     jpeg = output.getvalue()
+     if len(jpeg) > 32768:
+diff --git a/tests/test_dacai_panel.py b/tests/test_dacai_panel.py
+index 9443239..b98ae31 100644
+--- a/tests/test_dacai_panel.py
++++ b/tests/test_dacai_panel.py
+@@ -314,6 +314,29 @@ class SpriteDrawingTests(unittest.TestCase):
+         self.assertEqual([op for op, _ in sent(self.lcd)], [0x28])
+ 
+ 
++class OpaqueThumbnailTests(unittest.TestCase):
++    def thumb(self, size, dacai_on):
++        from petrel.features.files.thumbnail_preview import image_jpeg
++        source = Image.new('RGBA', (64, 32), (0, 0, 0, 0))
++        source.paste((250, 120, 0, 255), (16, 8, 48, 24))
++        buffer = io.BytesIO()
++        source.save(buffer, 'PNG')
++        with patch.dict('os.environ', {'PETREL_DACAI': '1' if dacai_on else '0'}):
++            return Image.open(io.BytesIO(image_jpeg(buffer.getvalue(), size=size))).convert('RGB')
++
++    def test_dacai_thumbnails_sit_on_the_ui_background(self):
++        from petrel.ui.theme import BACKGROUND_COLOR
++        corner = self.thumb(128, True).getpixel((2, 2))
++        rgb565 = ((corner[0] >> 3) << 11) | ((corner[1] >> 2) << 5) | (corner[2] >> 3)
++        self.assertEqual(rgb565, BACKGROUND_COLOR, corner)
++        self.assertLess(max(self.thumb(128, False).getpixel((2, 2))), 12)
++
++    def test_print_tile_keeps_its_artwork(self):
++        tile = self.thumb(88, True)
++        centre_edge = tile.getpixel((44, 4))
++        self.assertGreater(max(centre_edge), 30)
++
++
+ class DacaiConfigurationTests(unittest.TestCase):
+     def test_kconfig_round_trip_and_baud_validation(self):
+         from tools.configure import Configuration, collect, defaults, render_env, validate
+-- 
+2.47.3
+

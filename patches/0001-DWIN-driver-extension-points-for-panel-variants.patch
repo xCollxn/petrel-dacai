@@ -1,7 +1,7 @@
 From bbda79bcba42233ea55cd0187c602b48927e09fa Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 00:40:58 +0100
-Subject: [PATCH 1/7] DWIN driver: extension points for panel variants
+Subject: [PATCH 1/8] DWIN driver: extension points for panel variants
 
 - PICTURE_ID_MAX bounds picture IDs for 0x22/0x25/0x33 (15 on T5UIC1).
 - prepare_picture() transforms JPEG bytes before store_sram_as_picture;

@@ -35,7 +35,7 @@ git clone https://github.com/sezgynus/Petrel.git ~/Petrel
 cd ~/Petrel
 git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
 git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
-git log --oneline | head -8          # seven commits on top (DWIN driver / DacaiDriver / configure.sh / Optional / Maintenance)
+git log --oneline | head -9          # eight commits on top (DWIN driver / DacaiDriver / configure.sh / thumbnails / Optional / Maintenance)
 git status --short                   # must be empty (the installer requires a clean tree)
 ```
 
