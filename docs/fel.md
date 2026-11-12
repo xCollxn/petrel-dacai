@@ -116,11 +116,13 @@ $P dacai_fs.py list    "$B"                                     # what is on the
 $P dacai_fs.py extract "$B" /ICON/2.zico 2.zico                # copy a file out
 $P dacai_fs.py delete  "$B" fs-new.bin /IMAGE/22.JPG /MAIN.LUA # remove files
 $P dacai_fs.py replace "$B" fs-new.bin /ICON/2.zico my.zico    # swap a file's content
+$P dacai_fs.py repair  "$B" fs-new.bin                          # free space no file owns
 ```
 
-`delete` and `replace` write a 1 MB image and check that every other file is byte-identical.
-To combine several steps, use the previous output image as the next input. Then, with the
-screen in FEL mode:
+`delete`, `replace` and `repair` write a 1 MB image and check that every other file is
+byte-identical. To combine several steps, use the previous output image as the next input.
+`list` ends with `file system consistent` or with a warning and what to do about it. Then, with
+the screen in FEL mode:
 
 ```bash
 bash fel_write_fs.sh fs-new.bin "$B"
@@ -128,6 +130,21 @@ bash fel_write_fs.sh fs-new.bin "$B"
 
 The script writes **only** the file system (offset `0x100000`), reads it back and compares, and
 confirms that boot code and firmware still match your backup (about 20 s).
+
+### The firmware's own FAT copy
+
+The screen firmware can keep a copy of the boot sector and the FAT in the last 16 sectors of
+the file system (8 KB that the FAT shows as free), followed by a header `00 01 FF FE` +
+CRC-16/MODBUS. If that header is valid and the copy differs from the FAT, the firmware **restores
+the old FAT at the next start** – an offline edit is undone, and the space it freed comes back as
+used by no file. On the reference screen this filled the file system until Petrel's picture
+uploads were acknowledged but no longer stored (icons stayed empty).
+
+`dacai_fs.py` therefore updates that copy on every write (`list` shows its state). When the
+screen was nearly full, the firmware may also have stored a picture in those sectors and then
+written its copy over it: `repair` then refuses and asks you to `delete` that picture first
+(Petrel uploads it again). After writing an image back, a fresh backup + `list` should report
+`file system consistent`.
 
 ## 7. Native icons and animations (patch 0009)
 

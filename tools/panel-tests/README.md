@@ -14,5 +14,6 @@ talks to `/dev/ttyAMA0` at 115200 and turns the backlight on with `0x30 FF` wher
 | `show_slot.py <id>` | show picture `<id>` with `0x22` |
 | `aux_test.py` | extended UART `0x38`/`0x39` (no effect on DACAI) |
 | `dacai_native.py` | Dacai's own HMI handshake `EE 04 FF FC FF FF` (no answer) |
+| `rect_extent_test.py up\|left\|down\|right\|copy` | which rows/columns `0x09` and `0x27` really touch (off-by-one on DACAI) |
 
 `picture_slot_padded.py` writes to the panel's flash – use a free picture slot (Petrel uses 0 and 1).

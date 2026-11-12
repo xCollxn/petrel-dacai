@@ -57,6 +57,9 @@ Stopping/starting Petrel without sudo (Moonraker manages it after install):
   `0x100000` unless the user asks to restore their own full backup.
 * Edit file-system images offline with `dacai_fs.py`; after Petrel updates run `zico_tool.py compare`
   before using `PETREL_DACAI_PANEL_ICONS=1`.
+* After writing an image back, start the screen normally once, then make a fresh backup:
+  `dacai_fs.py list` must end with `file system consistent` (the firmware can undo offline edits,
+  see "The firmware's own FAT copy" in docs/fel.md).
 
 ## Symptoms → cause
 
@@ -64,6 +67,7 @@ Stopping/starting Petrel without sudo (Moonraker manages it after install):
 |---|---|
 | No handshake answer | UART wires swapped (DIN/DOUT labels can be from the mainboard's view), UART not enabled, wrong port, other program owns the port |
 | `LCD UART unavailable; reconnect scheduled` in a loop | `PETREL_DACAI=1` missing (bare `A5 4F 4B` flash ACK) or patches not applied |
+| Icons missing on some screens although the log says "upload complete" | the panel file system is full: `0x33` is acknowledged but nothing stored. Usual causes: large own files (custom `2.zico`) or an earlier FEL edit the firmware undid. With FEL: fresh backup, `dacai_fs.py list` (follow its warning, usually `repair`), `fel_write_fs.sh`, then `dacai_artwork.py`. Without FEL: panel SD update, then `dacai_artwork.py` |
 | Icons missing / wrong after a panel SD update | the SD update removed the uploaded pictures → stop Petrel, `~/petrel-env/bin/python ~/Petrel/tools/dacai_artwork.py --serial-port …`, start Petrel |
 | Boot logo corrupted | unpatched Petrel ran once → apply patches, set `PETREL_DACAI=1`, run `tools/dacai_artwork.py` |
 | No thumbnail in the file preview | `PETREL_DACAI=1` missing; also check the G-code has thumbnails (`/server/files/metadata`) |

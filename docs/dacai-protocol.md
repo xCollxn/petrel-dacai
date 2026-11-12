@@ -16,13 +16,13 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
 | `0x30` backlight | ✅ | 0 = dark |
 | `0x32` read SRAM / data flash | ✅ | framed answer as on DWIN |
 | `0x02` points | ✅ | small points look like outlined squares at 4×4 |
-| `0x09` move area (scroll) | ✅ | mode 1 (translate) + fill colour as on DWIN |
+| `0x09` move area (scroll) | ⚠️ | mode 1 (translate) + fill colour as on DWIN, but moving left/up is off by one – see below |
 | `0x14` native number | ✅ | |
 | `0x21` QR code | ✅ | |
 | `0x30` backlight | ✅ | **range 0–63** (firmware clamps everything ≥ 63 to 100 %); 0 = off, 2–4 is the darkest usable level |
 | `0x28` / `0x29` native icon animation | ✅ | runs on the panel by itself, several channels at once, no `0x3D` refresh needed (tested: 2 channels, icons 181–185 and 166–173) |
 | `0x25` cache JPEG to area 1 + `0x26` copy from area 1 | ✅ | cache does not change the screen; copy is opaque (black pixels copied) |
-| `0x27` copy from area 0 (picture shown by `0x22`) | ⚠️ | works, but bit 7 is inverted – see below |
+| `0x27` copy from area 0 (picture shown by `0x22`) | ⚠️ | works, but bit 7 is inverted and one extra row is copied – see below |
 
 ## Different
 
@@ -55,6 +55,11 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    32768 bytes and ends with `FF D9`, upload it with `0x31 5A`, then send `0x33`.
    Tested: `0x22` shows it, `0x25`/`0x26` cache + copy work, and it survives a power cycle.
    Limit: one picture ≤ 32 KB (480×272 baseline JPEG at ~80 % quality ≈ 12–25 KB).
+   **The `OK` does not prove the file was stored.** When the file system is full, `0x33` is
+   still answered `AA 33 4F 4B` but nothing is stored, and pictures cannot be read back over
+   UART – the host cannot detect it. Every picture takes 32 KB. A panel with its stock files has
+   about 630 KB free; larger own files (e.g. a custom `2.zico`) or an offline edit that the
+   firmware undid (see [fel.md](fel.md#the-firmwares-own-fat-copy)) can use it up.
    **Icon libraries cannot be written over UART** – the firmware only ever *reads*
    `3:/icon/<n>.zico`. Workaround that works: put the icons on a JPEG **sprite sheet**, upload it
    like a picture, load it with `0x25 01 <id>` and copy single icons
@@ -75,7 +80,16 @@ layout `AA <cmd> <payload> CC 33 C3 3C`.
    of the picture are drawn over what is on screen. Petrel's boot screen restore
    (`copy_cache(0, …, background=True)` → `0x80`) therefore leaves old content behind; sending
    `0x00` on DACAI fixes it.
-7. **Font.** The stock font is a SimSun subset: monospaced, advance exactly 0.5 em,
+   **`0x27` copies one row too many:** rows `y0`…`y1+1`, columns `x0`…`x1` exactly. With a
+   neighbouring icon below the source rectangle that shows as a thin line under every copy.
+   Send `y1` one lower (one row: `y1 = y0 - 1`). Measured with dark/bright test rectangles on both
+   sides of a JPEG block boundary (`tools/panel-tests/rect_extent_test.py copy`).
+7. **`0x09` moving left or up is off by one.** The panel treats `x1` (left) or `y1` (up) as
+   exclusive: the last column/row is not moved and the fill starts one early, so every scroll
+   step leaves a line of fill colour (stripes across Petrel's Info QR code). Right and down are
+   exact. Send `x1`/`y1` one higher for left/up; the column/row after the area stays untouched
+   (`tools/panel-tests/rect_extent_test.py up|left|down|right`).
+8. **Font.** The stock font is a SimSun subset: monospaced, advance exactly 0.5 em,
    ascent 220/256, descent 36/256. Any replacement must keep 0.5 em advances, otherwise UIs that
    assume fixed 8/10 px cells break (`tools/build_font.py`).
 
@@ -149,16 +163,17 @@ Measured on the reference panel with `tools/panel-tests/limits_test.py` and Petr
 
 | Question | Result |
 |---|---|
-| Picture IDs above 15? | ✅ `0x33`/`0x25` work with IDs 16–23 (byte argument) |
-| Room for full 32 KB pictures | ✅ at least 8 extra pictures besides the stock ones |
+| Picture IDs above 15? | ✅ `0x33`/`0x25` work with IDs 16–24 (byte argument) |
+| Room for full 32 KB pictures | ✅ a panel with its stock files has about 630 KB free; Petrel's 10 pictures add about 260 KB |
 | Wait after `0x25` before copying? | **Not needed** – with 0 ms the right sheet was copied; the panel processes commands in order |
-| Petrel's icon library | 150 icons (all except the 36 large NFC frames) fit on **6 sheets** of 272×480 on a 16 px grid, pictures 16–21 |
-| First upload | ≈15 s at 460800 baud (6 × 32 KB + `0x33` each) |
+| Petrel's icon library | all 186 icons on **8 sheets** of 272×480 on a 16 px grid, pictures 16–23; the large NFC frames as patches over an earlier frame, each NFC animation on one sheet |
+| First upload | ≈20 s at 460800 baud, ≈40 s at 115200 (8 × 32 KB + `0x33` each) |
 | microSD update | removes uploaded pictures (`image/` is replaced), Data-Flash records survive → re-upload needed |
 
 The 16 px grid keeps every icon in its own JPEG 4:2:0 blocks, so colours do not bleed into a
-neighbour's black backing. Animations (`0x28`) only work with the panel's own icon files; Petrel
-steps them from the host instead.
+neighbour's black backing. A patch drawn inside a frame must also leave out its outermost pixel
+row/column: chroma upsampling blends it with the sheet neighbour. Animations (`0x28`) only work
+with the panel's own icon files; Petrel steps them from the host instead.
 
 ## Ways to write real icon files that were ruled out
 
