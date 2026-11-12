@@ -1,0 +1,96 @@
+From d7906134ed5d6d095f521b65325b75a0a4c22396 Mon Sep 17 00:00:00 2001
+From: xCollxn <81695022+xCollxn@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 01:43:16 +0100
+Subject: [PATCH 09/10] Optional PETREL_DACAI_PANEL_ICONS: use the panel's own
+ icon files
+
+For a DACAI panel that already holds Petrel's icon library as icon/2.zico
+(installed via microSD or FEL): icons and 0x28 animations run natively, no
+sprite sheets are uploaded, and the sprite checkpoint is cleared so that
+switching back uploads every sheet again.
+---
+ petrel/hardware/dwin/dacai.py | 23 ++++++++++++++++++++++-
+ tests/test_dacai_panel.py     | 17 +++++++++++++++++
+ 2 files changed, 39 insertions(+), 1 deletion(-)
+
+diff --git a/petrel/hardware/dwin/dacai.py b/petrel/hardware/dwin/dacai.py
+index 64d8dc7..85e2bdd 100644
+--- a/petrel/hardware/dwin/dacai.py
++++ b/petrel/hardware/dwin/dacai.py
+@@ -29,6 +29,9 @@ UART_CLOCK = 15667200
+ DEFAULT_BAUD = 115200
+ HOST_BAUDS = (115200, 230400, 460800, 921600)
+ PICTURE_SIZE = 0x8000
++# Optional: the panel already holds Petrel's icon library as icon/2.zico (installed
++# via microSD or FEL). Then icons and 0x28 animations run natively, no sprite sheets.
++PANEL_ICONS = os.environ.get('PETREL_DACAI_PANEL_ICONS') == '1'
+ 
+ 
+ def enabled():
+@@ -152,6 +155,8 @@ class DacaiDriver(T5UIC1Display):
+     def _startup_animation_library(self):
+         from petrel.artwork import sprites
+         from petrel.artwork.resources import ICON_LIBRARY_ID
++        if PANEL_ICONS:
++            return ICON_LIBRARY_ID
+         try:
+             current = sprites.load()
+             if sprites.resident(self, current):
+@@ -162,9 +167,25 @@ class DacaiDriver(T5UIC1Display):
+         return None  # First install: draw the boot frame without icons.
+ 
+     def _startup_sync_icons(self):
+-        self.sync_sprites()
++        if PANEL_ICONS:
++            self._forget_sprites()
++        else:
++            self.sync_sprites()
+         self._assets_synced = True
+ 
++    def _forget_sprites(self):
++        """Panel icon files in use: invalidate the sprite checkpoint, so switching
++        back uploads every sheet again (the pictures may have been removed)."""
++        from petrel.artwork import sprites
++        self._sprites = None
++        raw = self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE)
++        if sprites.parse_metadata(raw):
++            blank = bytes(sprites.METADATA_SIZE)
++            self.write_flash(sprites.METADATA_ADDRESS, blank)
++            if self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE) != blank:
++                raise RuntimeError('Sprite metadata invalidation failed')
++            logging.info('Panel icon files in use; sprite checkpoint cleared')
++
+     def sync_sprites(self, *, force=False):
+         """Upload changed sheets; ``force`` repairs pictures removed by a microSD update."""
+         from petrel.artwork import sprites
+diff --git a/tests/test_dacai_panel.py b/tests/test_dacai_panel.py
+index b98ae31..aa2f01d 100644
+--- a/tests/test_dacai_panel.py
++++ b/tests/test_dacai_panel.py
+@@ -337,6 +337,23 @@ class OpaqueThumbnailTests(unittest.TestCase):
+         self.assertGreater(max(centre_edge), 30)
+ 
+ 
++class PanelIconTests(unittest.TestCase):
++    def test_panel_icons_skip_sheets_and_clear_checkpoint(self):
++        lcd = dacai_driver()
++        lcd._sprites = {7: (0, 0, 0, 20, 20)}
++        flash = {'raw': sprites.metadata([bytes(range(32))])}
++        lcd.read_flash = lambda address, size: flash['raw']
++        lcd.write_flash = lambda address, data: flash.__setitem__('raw', data)
++        with patch('petrel.hardware.dwin.dacai.PANEL_ICONS', True):
++            self.assertEqual(lcd._startup_animation_library(), ICON_LIBRARY_ID)
++            lcd._startup_sync_icons()
++        self.assertIsNone(lcd._sprites)
++        self.assertEqual(sprites.parse_metadata(flash['raw']), [])
++        lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++        lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
++        self.assertEqual([op for op, _ in sent(lcd)], [0x23, 0x28])
++
++
+ class DacaiConfigurationTests(unittest.TestCase):
+     def test_kconfig_round_trip_and_baud_validation(self):
+         from tools.configure import Configuration, collect, defaults, render_env, validate
+-- 
+2.47.3
+

@@ -22,9 +22,10 @@ This project contains everything that was needed to make Petrel work properly on
 
 | | What | Where |
 |---|---|---|
-| 🔧 | A `DacaiDriver` for Petrel (proposed upstream): artwork **and icons go over the UART – no microSD card needed** – plus 4 optional extras | [`patches/`](patches/) |
+| 🔧 | A `DacaiDriver` for Petrel (proposed upstream): artwork **and icons go over the UART – no microSD card needed** – plus 6 optional extras | [`patches/`](patches/) |
 | 🖼️ | ★ Optional microSD overlay: 189 icons (74 redrawn in a filled colour style + 3 new), a neutral boot image, a crisp monospace font | [`sd-overlay/`](sd-overlay/) |
 | 🧰 | Tools: detect DWIN vs. DACAI, build icon libraries (ZICO), build fonts, render boot images, assemble the SD folder | [`tools/`](tools/) |
+| 🛟 | ★ For solderers: FEL access over the screen's USB pins – full flash backup, rescue, native icons and animations | [`docs/fel.md`](docs/fel.md), [`tools/fel/`](tools/fel/) |
 | 📖 | What DACAI does differently – documented for the first time as far as we know | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
 | 🏠 | Optional Home Assistant automation: printer switched on → Klipper connects by itself | [`examples/home-assistant/`](examples/home-assistant/) |
 
@@ -106,7 +107,7 @@ Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`]
    git clone https://github.com/sezgynus/Petrel.git ~/Petrel
    cd ~/Petrel
    git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
-   git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
+   git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/00*.patch
    ```
 4. **Create `~/.config/Petrel/Petrel.env`** from [`examples/Petrel.env`](examples/Petrel.env)
    (this also makes the installer skip its configuration menu). It sets `PETREL_DACAI=1`.
@@ -126,9 +127,11 @@ Detailed steps: [`docs/install.md`](docs/install.md). Wiring: [`docs/wiring.md`]
 | 0006 | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while Klipper reports the printer board unreachable; the knob wakes it for 10 s |
 | 0007 | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come with the SD overlay) |
 | 0008 | `PETREL_BOOT_ARTWORK=…` | Own boot picture, uploaded over UART |
+| 0009 | `PETREL_DACAI_PANEL_ICONS=1` | ★ Use the screen's own icon library (`icon/2.zico`, via microSD or [FEL](docs/fel.md)) instead of sprite sheets – your own icons, native `0x28` animations |
+| 0010 | `PETREL_FILE_THUMBNAILS=1` | Small model pictures instead of the file icon in the file list (also works on DWIN) |
 
 0001–0004 are the part proposed to Petrel upstream. `patches/petrel-dacai-all.patch` contains
-all eight as one diff. The previous SD-based series is kept in
+all ten as one diff. The previous SD-based series is kept in
 [`patches/legacy-764d406-sd/`](patches/legacy-764d406-sd/).
 
 ## ★ Optional add-ons
@@ -140,6 +143,7 @@ None of these is needed for the screen to work.
 | **Autostart via Home Assistant** | Home Assistant, the Moonraker integration and a smart plug that **measures** the printer's power | When you switch the printer on, Klipper normally stays in `Lost communication with MCU` until someone sends `FIRMWARE_RESTART`. The automation sends it as soon as the printer draws power – switch on, wait ~20 s, ready. → [`examples/home-assistant/`](examples/home-assistant/) |
 | **Own boot image** | nothing extra | `tools/make_boot.py --title "My Printer" --info "220 × 220 × 250 mm" my_boot.jpg`, then set `PETREL_BOOT_ARTWORK=/path/my_boot.jpg` (patch 0008) – uploaded over UART |
 | **Own font / redrawn icons** | microSD card, Python with Pillow (+ fonttools for the font) | SD overlay, see [`docs/sd-update.md`](docs/sd-update.md) and [AGENTS.md](AGENTS.md#practical-notes-for-agents) |
+| **FEL access** | soldering iron, an old USB cable, a spare microSD card | Three solder joints at J3 give raw access to the screen's flash over USB: backup, rescue, native icons/animations, clean-up → [`docs/fel.md`](docs/fel.md) |
 
 Without the Home Assistant add-on you simply send `FIRMWARE_RESTART` from Mainsail/Fluidd (or
 from the screen's recovery page) after switching the printer on – exactly as before.

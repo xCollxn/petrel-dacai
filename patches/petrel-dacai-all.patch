@@ -737,11 +737,131 @@ index df2169c..8cc918f 100644
          if (values and values[1] and not getattr(self, '_display_dimmed', False)
                  and time.monotonic() - self._display_last_activity >= values[1] * 60
                  and not getattr(self, '_display_edit', False)):
+diff --git a/petrel/features/files/browser_view.py b/petrel/features/files/browser_view.py
+index c7f04c1..93f7cd4 100644
+--- a/petrel/features/files/browser_view.py
++++ b/petrel/features/files/browser_view.py
+@@ -103,7 +103,11 @@ class FileBrowserMixin:
+         path = self._file_paths[item]
+         is_dir = path.endswith('/')
+         label = path.rstrip('/').rsplit('/', 1)[-1]
+-        self.Draw_Menu_Line(row, False if is_dir else self.ICON_File, label)
++        address = None if is_dir else self._file_list_address(path)
++        self.Draw_Menu_Line(row, False if is_dir or address is not None else self.ICON_File, label)
++        if address is not None:
++            # 32x32 model picture in place of the 20x20 file icon.
++            self.lcd.show_sram_jpeg(20, self.MBASE(row) - 9, address, background=False, enhanced=True)
+         if is_dir:
+             show_theme_icon(self.lcd, self.ICON, ICON_FOLDER, 26, self.MBASE(row) - 7)
+ 
+@@ -115,7 +119,7 @@ class FileBrowserMixin:
+             self._refresh_file_snapshot()
+         entries = [('Back', self.ICON_Back, None, None)]
+         for index, path in enumerate(self._file_paths):
+-            entries.append(('', False, path,
++            entries.append(('', False, (path, self._file_list_address(path)),
+                 lambda row, index=index: self.Draw_SDItem(index, row)))
+         directory = getattr(self, '_file_directory', '')
+         self._draw_list_menu(('Print: /' + directory)[-32:] if directory else 'Print file',
+diff --git a/petrel/features/files/preview.py b/petrel/features/files/preview.py
+index b6b5ba2..eb28c55 100644
+--- a/petrel/features/files/preview.py
++++ b/petrel/features/files/preview.py
+@@ -3,6 +3,11 @@ import logging
+ import time
+ from itertools import islice
+ from petrel.features.files.thumbnail_cache import ThumbnailCache
++from petrel.features.files.thumbnail_preview import LIST_SIZE
++import os
++
++# Optional: model pictures instead of file icons in the file list.
++FILE_THUMBNAILS = os.environ.get('PETREL_FILE_THUMBNAILS') == '1'
+ from petrel.features.files.metadata import PreviewDetails, amount, duration, filament_length
+ 
+ 
+@@ -32,6 +37,7 @@ class FilePreviewMixin:
+         stamp = (getattr(self, '_uart_epoch', 0), self.pd.state.epoch, revision,
+                  self.pd.file_sort_revision, id(self.pd.files), getattr(self, '_file_paths', ()),
+                  getattr(self, '_preview_cache_key', None), getattr(self.pd, '_files_generation', 0),
++                 (getattr(self, 'index_file', None), getattr(self, 'checkkey', None)) if FILE_THUMBNAILS else None,
+                  self.pd.file_name if self.pd.status in ('printing','paused','pausing','complete','cancelled') else None)
+         if stamp == getattr(self, '_thumbnail_stamp', None):
+             return
+@@ -53,10 +59,12 @@ class FilePreviewMixin:
+                 for item in self.pd.files}
+         priority = tuple(islice((self._thumbnail_keys[path] for path in getattr(self, '_file_paths', ())
+                          if path in self._thumbnail_keys and not path.endswith('/')), 5))
++        if FILE_THUMBNAILS and getattr(self, 'checkkey', None) == getattr(self, 'SelectFile', object()):
++            priority = tuple(self._file_list_keys()) + priority
+         path = stamp[-1]
+         self._print_thumbnail_key = None
+         retained = set(self._thumbnail_cache.entries) | set(self._thumbnail_cache.details)
+-        valid = [key for key in retained if self._thumbnail_keys.get(key[0]) == key]
++        valid = [key for key in retained if self._thumbnail_keys.get(key[0]) == key[:4]]
+         valid.extend(priority)
+         preview = getattr(self, '_preview_cache_key', None)
+         if preview is not None and self._thumbnail_keys.get(preview[0]) == preview:
+@@ -69,9 +77,32 @@ class FilePreviewMixin:
+                                     getattr(self.pd, '_files_generation', 0)),
+                                    valid, priority)
+ 
++    def _visible_file_paths(self):
++        start = max(1, getattr(self, 'index_file', self.MROWS) - self.MROWS)
++        return getattr(self, '_file_paths', ())[start - 1:start - 1 + self.TROWS]
++
++    def _file_list_keys(self):
++        keys = getattr(self, '_thumbnail_keys', {})
++        for path in self._visible_file_paths():
++            if path in keys and not path.endswith('/'):
++                yield keys[path] + (LIST_SIZE,)
++
++    def _file_list_address(self, path):
++        cache = getattr(self, '_thumbnail_cache', None)
++        base = getattr(self, '_thumbnail_keys', {}).get(path)
++        if not FILE_THUMBNAILS or cache is None or base is None:
++            return None
++        return cache.address(base + (LIST_SIZE,))
++
+     def _poll_thumbnail_preload(self):
+         self._sync_thumbnail_cache()
+         self._thumbnail_cache.tick(self.lcd, chunks=2)
++        if FILE_THUMBNAILS and self.checkkey == self.SelectFile:
++            ready = tuple(self._file_list_address(path) for path in self._visible_file_paths())
++            if ready != getattr(self, '_file_list_ready', None):
++                self._file_list_ready = ready
++                self.Redraw_SD_List()
++                self.lcd.update()
+ 
+     def _open_file_preview(self, path):
+         self._sync_thumbnail_cache()
+diff --git a/petrel/features/files/thumbnail_cache.py b/petrel/features/files/thumbnail_cache.py
+index 747d3d8..009a3e3 100644
+--- a/petrel/features/files/thumbnail_cache.py
++++ b/petrel/features/files/thumbnail_cache.py
+@@ -46,7 +46,8 @@ class ThumbnailCache:
+             self.retry_at.clear()
+             self.upload = None
+         self.valid = set(valid)
+-        priority = tuple(key for key in priority if key in self.valid)[:5]
++        # Up to 6 visible file-list pictures plus 5 preview preloads.
++        priority = tuple(key for key in priority if key in self.valid)[:11]
+         if priority != self.priority:
+             self.errors = {key: value for key, value in self.errors.items() if value != 'LCD cache full'}
+         self.priority = priority
 diff --git a/petrel/features/files/thumbnail_preview.py b/petrel/features/files/thumbnail_preview.py
-index 67a1bf2..1a42eae 100644
+index 67a1bf2..5cac18f 100644
 --- a/petrel/features/files/thumbnail_preview.py
 +++ b/petrel/features/files/thumbnail_preview.py
-@@ -34,6 +34,30 @@ def _protect_dark_foreground(rgba):
+@@ -8,6 +8,8 @@ from PIL import Image
+ from petrel.features.files.metadata import PreviewData, details_from_metadata
+ 
+ MIN_FOREGROUND_LUMA = 48
++# PETREL_FILE_THUMBNAILS: small model picture instead of the file icon in the file list.
++LIST_SIZE = 32
+ MAX_CANDIDATES = 4
+ 
+ 
+@@ -34,19 +36,46 @@ def _protect_dark_foreground(rgba):
      return protected
  
  
@@ -771,8 +891,11 @@ index 67a1bf2..1a42eae 100644
 +
  def image_jpeg(data, size=128):
      """Reserve black backing for filtered drawing, protecting dark model details."""
-     if size not in (88, 128):
-@@ -43,10 +67,13 @@ def image_jpeg(data, size=128):
+-    if size not in (88, 128):
++    if size not in (LIST_SIZE, 88, 128):
+         raise ValueError('Unsupported panel thumbnail size')
+     with Image.open(BytesIO(data)) as source:
+         if source.width * source.height > 4_000_000:
              raise ValueError('Thumbnail too large')
          source.thumbnail((size, size), Image.Resampling.LANCZOS)
          rgba = _protect_dark_foreground(source.convert('RGBA'))
@@ -945,10 +1068,10 @@ index a4d9f84..17a5aa3 100644
      if action=='historical_result': return feature_icon(value.get('feature',''),value.get('device'))
 diff --git a/petrel/hardware/dwin/dacai.py b/petrel/hardware/dwin/dacai.py
 new file mode 100644
-index 0000000..64d8dc7
+index 0000000..85e2bdd
 --- /dev/null
 +++ b/petrel/hardware/dwin/dacai.py
-@@ -0,0 +1,267 @@
+@@ -0,0 +1,288 @@
 +"""DACAI panels that emulate the DWIN T5UIC1 protocol (e.g. Ender 3 Max Neo).
 +
 +Creality ships some printers with a Guangzhou DACAI panel (Allwinner F1C100s,
@@ -980,6 +1103,9 @@ index 0000000..64d8dc7
 +DEFAULT_BAUD = 115200
 +HOST_BAUDS = (115200, 230400, 460800, 921600)
 +PICTURE_SIZE = 0x8000
++# Optional: the panel already holds Petrel's icon library as icon/2.zico (installed
++# via microSD or FEL). Then icons and 0x28 animations run natively, no sprite sheets.
++PANEL_ICONS = os.environ.get('PETREL_DACAI_PANEL_ICONS') == '1'
 +
 +
 +def enabled():
@@ -1103,6 +1229,8 @@ index 0000000..64d8dc7
 +    def _startup_animation_library(self):
 +        from petrel.artwork import sprites
 +        from petrel.artwork.resources import ICON_LIBRARY_ID
++        if PANEL_ICONS:
++            return ICON_LIBRARY_ID
 +        try:
 +            current = sprites.load()
 +            if sprites.resident(self, current):
@@ -1113,8 +1241,24 @@ index 0000000..64d8dc7
 +        return None  # First install: draw the boot frame without icons.
 +
 +    def _startup_sync_icons(self):
-+        self.sync_sprites()
++        if PANEL_ICONS:
++            self._forget_sprites()
++        else:
++            self.sync_sprites()
 +        self._assets_synced = True
++
++    def _forget_sprites(self):
++        """Panel icon files in use: invalidate the sprite checkpoint, so switching
++        back uploads every sheet again (the pictures may have been removed)."""
++        from petrel.artwork import sprites
++        self._sprites = None
++        raw = self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE)
++        if sprites.parse_metadata(raw):
++            blank = bytes(sprites.METADATA_SIZE)
++            self.write_flash(sprites.METADATA_ADDRESS, blank)
++            if self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE) != blank:
++                raise RuntimeError('Sprite metadata invalidation failed')
++            logging.info('Panel icon files in use; sprite checkpoint cleared')
 +
 +    def sync_sprites(self, *, force=False):
 +        """Upload changed sheets; ``force`` repairs pictures removed by a microSD update."""
@@ -1384,10 +1528,10 @@ index f96facf..957f00c 100644
          lcd.write_flash.side_effect = lambda address, data: flash.update({address: data})
 diff --git a/tests/test_dacai_panel.py b/tests/test_dacai_panel.py
 new file mode 100644
-index 0000000..b98ae31
+index 0000000..aa2f01d
 --- /dev/null
 +++ b/tests/test_dacai_panel.py
-@@ -0,0 +1,356 @@
+@@ -0,0 +1,373 @@
 +import io
 +from pathlib import Path
 +import unittest
@@ -1725,6 +1869,23 @@ index 0000000..b98ae31
 +        tile = self.thumb(88, True)
 +        centre_edge = tile.getpixel((44, 4))
 +        self.assertGreater(max(centre_edge), 30)
++
++
++class PanelIconTests(unittest.TestCase):
++    def test_panel_icons_skip_sheets_and_clear_checkpoint(self):
++        lcd = dacai_driver()
++        lcd._sprites = {7: (0, 0, 0, 20, 20)}
++        flash = {'raw': sprites.metadata([bytes(range(32))])}
++        lcd.read_flash = lambda address, size: flash['raw']
++        lcd.write_flash = lambda address, data: flash.__setitem__('raw', data)
++        with patch('petrel.hardware.dwin.dacai.PANEL_ICONS', True):
++            self.assertEqual(lcd._startup_animation_library(), ICON_LIBRARY_ID)
++            lcd._startup_sync_icons()
++        self.assertIsNone(lcd._sprites)
++        self.assertEqual(sprites.parse_metadata(flash['raw']), [])
++        lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++        lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
++        self.assertEqual([op for op, _ in sent(lcd)], [0x23, 0x28])
 +
 +
 +class DacaiConfigurationTests(unittest.TestCase):

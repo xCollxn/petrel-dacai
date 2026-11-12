@@ -1,0 +1,153 @@
+From 2cb355a2716717d966f4cca12ec45df438d62d4f Mon Sep 17 00:00:00 2001
+From: xCollxn <81695022+xCollxn@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 01:54:26 +0100
+Subject: [PATCH 10/10] Optional PETREL_FILE_THUMBNAILS: model pictures instead
+ of file icons in the file list
+
+Visible file rows get a 32x32 version of the G-code thumbnail, loaded in the
+background through the existing SRAM thumbnail cache (visible rows first,
+then the usual preview preloads). A row is redrawn once its picture is in
+SRAM; until then, and for files without a thumbnail, the file icon stays.
+---
+ petrel/features/files/browser_view.py      |  8 ++++--
+ petrel/features/files/preview.py           | 33 +++++++++++++++++++++-
+ petrel/features/files/thumbnail_cache.py   |  3 +-
+ petrel/features/files/thumbnail_preview.py |  4 ++-
+ 4 files changed, 43 insertions(+), 5 deletions(-)
+
+diff --git a/petrel/features/files/browser_view.py b/petrel/features/files/browser_view.py
+index c7f04c1..93f7cd4 100644
+--- a/petrel/features/files/browser_view.py
++++ b/petrel/features/files/browser_view.py
+@@ -103,7 +103,11 @@ class FileBrowserMixin:
+         path = self._file_paths[item]
+         is_dir = path.endswith('/')
+         label = path.rstrip('/').rsplit('/', 1)[-1]
+-        self.Draw_Menu_Line(row, False if is_dir else self.ICON_File, label)
++        address = None if is_dir else self._file_list_address(path)
++        self.Draw_Menu_Line(row, False if is_dir or address is not None else self.ICON_File, label)
++        if address is not None:
++            # 32x32 model picture in place of the 20x20 file icon.
++            self.lcd.show_sram_jpeg(20, self.MBASE(row) - 9, address, background=False, enhanced=True)
+         if is_dir:
+             show_theme_icon(self.lcd, self.ICON, ICON_FOLDER, 26, self.MBASE(row) - 7)
+ 
+@@ -115,7 +119,7 @@ class FileBrowserMixin:
+             self._refresh_file_snapshot()
+         entries = [('Back', self.ICON_Back, None, None)]
+         for index, path in enumerate(self._file_paths):
+-            entries.append(('', False, path,
++            entries.append(('', False, (path, self._file_list_address(path)),
+                 lambda row, index=index: self.Draw_SDItem(index, row)))
+         directory = getattr(self, '_file_directory', '')
+         self._draw_list_menu(('Print: /' + directory)[-32:] if directory else 'Print file',
+diff --git a/petrel/features/files/preview.py b/petrel/features/files/preview.py
+index b6b5ba2..eb28c55 100644
+--- a/petrel/features/files/preview.py
++++ b/petrel/features/files/preview.py
+@@ -3,6 +3,11 @@ import logging
+ import time
+ from itertools import islice
+ from petrel.features.files.thumbnail_cache import ThumbnailCache
++from petrel.features.files.thumbnail_preview import LIST_SIZE
++import os
++
++# Optional: model pictures instead of file icons in the file list.
++FILE_THUMBNAILS = os.environ.get('PETREL_FILE_THUMBNAILS') == '1'
+ from petrel.features.files.metadata import PreviewDetails, amount, duration, filament_length
+ 
+ 
+@@ -32,6 +37,7 @@ class FilePreviewMixin:
+         stamp = (getattr(self, '_uart_epoch', 0), self.pd.state.epoch, revision,
+                  self.pd.file_sort_revision, id(self.pd.files), getattr(self, '_file_paths', ()),
+                  getattr(self, '_preview_cache_key', None), getattr(self.pd, '_files_generation', 0),
++                 (getattr(self, 'index_file', None), getattr(self, 'checkkey', None)) if FILE_THUMBNAILS else None,
+                  self.pd.file_name if self.pd.status in ('printing','paused','pausing','complete','cancelled') else None)
+         if stamp == getattr(self, '_thumbnail_stamp', None):
+             return
+@@ -53,10 +59,12 @@ class FilePreviewMixin:
+                 for item in self.pd.files}
+         priority = tuple(islice((self._thumbnail_keys[path] for path in getattr(self, '_file_paths', ())
+                          if path in self._thumbnail_keys and not path.endswith('/')), 5))
++        if FILE_THUMBNAILS and getattr(self, 'checkkey', None) == getattr(self, 'SelectFile', object()):
++            priority = tuple(self._file_list_keys()) + priority
+         path = stamp[-1]
+         self._print_thumbnail_key = None
+         retained = set(self._thumbnail_cache.entries) | set(self._thumbnail_cache.details)
+-        valid = [key for key in retained if self._thumbnail_keys.get(key[0]) == key]
++        valid = [key for key in retained if self._thumbnail_keys.get(key[0]) == key[:4]]
+         valid.extend(priority)
+         preview = getattr(self, '_preview_cache_key', None)
+         if preview is not None and self._thumbnail_keys.get(preview[0]) == preview:
+@@ -69,9 +77,32 @@ class FilePreviewMixin:
+                                     getattr(self.pd, '_files_generation', 0)),
+                                    valid, priority)
+ 
++    def _visible_file_paths(self):
++        start = max(1, getattr(self, 'index_file', self.MROWS) - self.MROWS)
++        return getattr(self, '_file_paths', ())[start - 1:start - 1 + self.TROWS]
++
++    def _file_list_keys(self):
++        keys = getattr(self, '_thumbnail_keys', {})
++        for path in self._visible_file_paths():
++            if path in keys and not path.endswith('/'):
++                yield keys[path] + (LIST_SIZE,)
++
++    def _file_list_address(self, path):
++        cache = getattr(self, '_thumbnail_cache', None)
++        base = getattr(self, '_thumbnail_keys', {}).get(path)
++        if not FILE_THUMBNAILS or cache is None or base is None:
++            return None
++        return cache.address(base + (LIST_SIZE,))
++
+     def _poll_thumbnail_preload(self):
+         self._sync_thumbnail_cache()
+         self._thumbnail_cache.tick(self.lcd, chunks=2)
++        if FILE_THUMBNAILS and self.checkkey == self.SelectFile:
++            ready = tuple(self._file_list_address(path) for path in self._visible_file_paths())
++            if ready != getattr(self, '_file_list_ready', None):
++                self._file_list_ready = ready
++                self.Redraw_SD_List()
++                self.lcd.update()
+ 
+     def _open_file_preview(self, path):
+         self._sync_thumbnail_cache()
+diff --git a/petrel/features/files/thumbnail_cache.py b/petrel/features/files/thumbnail_cache.py
+index 747d3d8..009a3e3 100644
+--- a/petrel/features/files/thumbnail_cache.py
++++ b/petrel/features/files/thumbnail_cache.py
+@@ -46,7 +46,8 @@ class ThumbnailCache:
+             self.retry_at.clear()
+             self.upload = None
+         self.valid = set(valid)
+-        priority = tuple(key for key in priority if key in self.valid)[:5]
++        # Up to 6 visible file-list pictures plus 5 preview preloads.
++        priority = tuple(key for key in priority if key in self.valid)[:11]
+         if priority != self.priority:
+             self.errors = {key: value for key, value in self.errors.items() if value != 'LCD cache full'}
+         self.priority = priority
+diff --git a/petrel/features/files/thumbnail_preview.py b/petrel/features/files/thumbnail_preview.py
+index 1a42eae..5cac18f 100644
+--- a/petrel/features/files/thumbnail_preview.py
++++ b/petrel/features/files/thumbnail_preview.py
+@@ -8,6 +8,8 @@ from PIL import Image
+ from petrel.features.files.metadata import PreviewData, details_from_metadata
+ 
+ MIN_FOREGROUND_LUMA = 48
++# PETREL_FILE_THUMBNAILS: small model picture instead of the file icon in the file list.
++LIST_SIZE = 32
+ MAX_CANDIDATES = 4
+ 
+ 
+@@ -60,7 +62,7 @@ def _opaque_canvas(size):
+ 
+ def image_jpeg(data, size=128):
+     """Reserve black backing for filtered drawing, protecting dark model details."""
+-    if size not in (88, 128):
++    if size not in (LIST_SIZE, 88, 128):
+         raise ValueError('Unsupported panel thumbnail size')
+     with Image.open(BytesIO(data)) as source:
+         if source.width * source.height > 4_000_000:
+-- 
+2.47.3
+

@@ -22,7 +22,8 @@ Hier liegt alles, was nötig war, damit Petrel auf einem DACAI-Display richtig l
 
 | | Was | Wo |
 |---|---|---|
-| 🔧 | Ein `DacaiDriver` für Petrel (an Petrel vorgeschlagen): Grafiken **und Icons kommen über das Kabel – keine SD-Karte nötig** – plus 4 optionale Extras | [`patches/`](patches/) |
+| 🔧 | Ein `DacaiDriver` für Petrel (an Petrel vorgeschlagen): Grafiken **und Icons kommen über das Kabel – keine SD-Karte nötig** – plus 6 optionale Extras | [`patches/`](patches/) |
+| 🛟 | ★ Für Lötwillige: FEL-Zugang über die USB-Pins des Displays – komplette Sicherung, Rettung, eigene Icons mit nativen Animationen | [`docs/fel.md`](docs/fel.md) (Englisch), [`tools/fel/`](tools/fel/) |
 | 🖼️ | ★ Optionales SD-Karten-Paket: 189 Icons (74 im gefüllten Farbstil neu gezeichnet + 3 neue), neutrales Startbild, klare Monospace-Schrift | [`sd-overlay/`](sd-overlay/) |
 | 🧰 | Werkzeuge: DWIN oder DACAI erkennen, Icon-Bibliothek (ZICO) bauen, Schrift bauen, Startbild rendern, SD-Ordner zusammenstellen | [`tools/`](tools/) |
 | 📖 | Was DACAI anders macht – soweit bekannt erstmals dokumentiert | [`docs/dacai-protocol.md`](docs/dacai-protocol.md) |
@@ -82,7 +83,7 @@ Ausführlich: [`docs/install.md`](docs/install.md) · Verkabelung: [`docs/wiring
    git clone https://github.com/sezgynus/Petrel.git ~/Petrel
    cd ~/Petrel
    git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
-   git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
+   git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/00*.patch
    ```
 4. [`examples/Petrel.env`](examples/Petrel.env) nach `~/.config/Petrel/Petrel.env` kopieren (setzt `PETREL_DACAI=1`).
 5. `cd ~/Petrel && bash install.sh` – beim ersten Start lädt Petrel Grafiken und Icon-Blätter
@@ -110,6 +111,8 @@ Für die Grundfunktion brauchst du nur Pi, Display und Kabel. Alles mit ★ ist 
 | **Autostart über Home Assistant** | Home Assistant, die Moonraker-Integration und eine Steckdose, die den Strom **misst** | Drucker einschalten → Home Assistant schickt `FIRMWARE_RESTART` → nach ~20 s bereit. Ohne Add-on: `FIRMWARE_RESTART` wie gewohnt in Mainsail/Fluidd. → [`examples/home-assistant/`](examples/home-assistant/) |
 | **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann `PETREL_BOOT_ARTWORK=/pfad/mein_boot.jpg` (Patch 0008) – geht über das Kabel |
 | **Eigene Schrift / neu gezeichnete Icons** | SD-Karte, Python mit Pillow (+ fonttools) | SD-Paket, siehe [`docs/sd-update.md`](docs/sd-update.md) |
+| **FEL-Zugang** | Lötkolben, altes USB-Kabel, freie microSD-Karte | Drei Lötstellen an J3: Sicherung des ganzen Display-Speichers, Rettung, eigene Icons mit nativen Animationen (Patch 0009), Aufräumen → [`docs/fel.md`](docs/fel.md) |
+| **Vorschaubilder in der Dateiliste** | nichts extra | Patch 0010, `PETREL_FILE_THUMBNAILS=1` |
 
 Das Dunkelschalten des Displays bei ausgeschaltetem Drucker braucht **keinen** Strommesser – Petrel erkennt das direkt an Klipper.
 

@@ -1,7 +1,7 @@
 From 2b281e0208591c7555429159a4b8d3d391a5f195 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 00:42:06 +0100
-Subject: [PATCH 8/8] Optional PETREL_BOOT_ARTWORK: own boot picture
+Subject: [PATCH 08/10] Optional PETREL_BOOT_ARTWORK: own boot picture
 
 ---
  petrel/artwork/boot.py | 5 ++++-

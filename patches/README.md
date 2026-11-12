@@ -5,7 +5,7 @@ Base: [sezgynus/Petrel](https://github.com/sezgynus/Petrel) commit
 
 **0001–0004 are the DACAI support proposed upstream** (a `DacaiDriver` class selected in
 `configure.sh`). With them, Petrel uploads the boot picture, shared artwork and icon sprite
-sheets over the UART – **no microSD card is needed**. 0005–0008 are optional extras from this
+sheets over the UART – **no microSD card is needed**. 0005–0010 are optional extras from this
 project.
 
 | File | Switch in `Petrel.env` | What it does |
@@ -18,6 +18,8 @@ project.
 | `0006-Optional-PETREL_DARK_WHEN_PRINTER_OFF-…` | `PETREL_DARK_WHEN_PRINTER_OFF=1` | Backlight off while the printer board is unreachable; the knob wakes it for 10 s |
 | `0007-Maintenance-belt-and-lead-screw-…` | – | Maintenance: belt / lead-screw tasks, friendly names, X/Y/Z badges (icons 186–188 come only with the SD overlay) |
 | `0008-Optional-PETREL_BOOT_ARTWORK-…` | `PETREL_BOOT_ARTWORK=/path/boot.jpg` | Own boot picture (480×272 baseline JPEG), uploaded over UART |
+| `0009-Optional-PETREL_DACAI_PANEL_ICONS-…` | `PETREL_DACAI_PANEL_ICONS=1` | Use the screen's own `icon/2.zico` (installed via microSD or [FEL](../docs/fel.md)): native icons and `0x28` animations, no sprite sheets; clears the sprite checkpoint so switching back re-uploads |
+| `0010-Optional-PETREL_FILE_THUMBNAILS-…` | `PETREL_FILE_THUMBNAILS=1` | 32×32 model pictures instead of the file icon in the file list, loaded in the background through Petrel's SRAM thumbnail cache (DWIN and DACAI) |
 | `petrel-dacai-all.patch` | – | all of the above as one diff |
 
 Apply as commits (keeps the tree clean for `install.sh`):
@@ -25,15 +27,15 @@ Apply as commits (keeps the tree clean for `install.sh`):
 ```bash
 cd ~/Petrel
 git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
-git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/000*.patch
+git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/00*.patch
 ```
 
 Only the upstream part: `git am ~/petrel-dacai/patches/000[1-4]*.patch`.
 
 Newer Petrel versions: `git rebase origin/master` on the `dacai` branch.
 
-Tests: 0001–0004 add 32 tests and keep Petrel's suite as green as plain upstream (3 failures
-exist on plain upstream too). 0007 intentionally changes maintenance behaviour, so 5 of Petrel's
+Tests: 0001–0004 add 32 tests (0009 one more) and keep Petrel's suite as green as plain upstream
+(3 failures exist on plain upstream too). 0007 intentionally changes maintenance behaviour, so 5 of Petrel's
 own maintenance tests fail with it applied.
 
 ## Older series

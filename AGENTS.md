@@ -38,7 +38,7 @@ it a requirement. Without it, `FIRMWARE_RESTART` from Mainsail/Fluidd after powe
 | 1 | Wiring per `docs/wiring.md`. Have the user measure DOUT→GND ≈ 3.3 V with 5 V connected before DOUT goes to the Pi. | value ≤ 3.3 V |
 | 2 | Enable UART (Pi 5: `dtparam=uart0=on` in `/boot/firmware/config.txt`, reboot – needs sudo, the user may have to type the password). | `/dev/ttyAMA0` exists, `pinctrl get 14,15` shows TXD0/RXD0 |
 | 3 | `python3 tools/dacai_probe.py --draw-test` with the display service stopped | handshake `aa 00 4f 4b …`, *DACAI panel*, user sees 4 squares |
-| 4 | Clone Petrel, `git checkout -b dacai 764d406…`, `git am patches/000*.patch` | `git status --short` empty, 8 commits on top |
+| 4 | Clone Petrel, `git checkout -b dacai 764d406…`, `git am patches/00*.patch` | `git status --short` empty, 10 commits on top |
 | 5 | Copy `examples/Petrel.env` to `~/.config/Petrel/Petrel.env`, replace `USER` | file exists *before* install, contains `PETREL_DACAI=1` |
 | 6 | `cd ~/Petrel && bash install.sh` (user runs it, needs sudo) | log shows `Sprite sheets: upload complete` (first start, ~15 s) and `LCD UART connected`; user sees Petrel icons |
 | 7 | ★ Only for own icons/font: build the SD folder (`tools/make_sd_package.py`), user flashes it (`docs/sd-update.md`), then re-upload artwork with `tools/dacai_artwork.py` in Petrel | user sees the custom font |
@@ -46,6 +46,17 @@ it a requirement. Without it, `FIRMWARE_RESTART` from Mainsail/Fluidd after powe
 
 Stopping/starting Petrel without sudo (Moonraker manages it after install):
 `curl -X POST "http://localhost:7125/machine/services/stop?service=Petrel"` (`start`, `restart`).
+
+## ★ FEL (only if the user wants to solder)
+
+[docs/fel.md](docs/fel.md) explains USB at J3, the FEL key card and `tools/fel/`. Rules:
+
+* **Backup first** (`fel_backup.sh`), copy it off the Pi, never commit or publish it (Creality firmware).
+* Before `dd` to a card: show `lsblk` and make sure the target is the card, not the system disk.
+* Write only the file system with `fel_write_fs.sh` (offset `0x100000`, verified). Never write below
+  `0x100000` unless the user asks to restore their own full backup.
+* Edit file-system images offline with `dacai_fs.py`; after Petrel updates run `zico_tool.py compare`
+  before using `PETREL_DACAI_PANEL_ICONS=1`.
 
 ## Symptoms → cause
 
@@ -75,6 +86,9 @@ Stopping/starting Petrel without sudo (Moonraker manages it after install):
   JPEG, black = transparent) and restart Petrel – only changed sheets are uploaded. The SD
   route (`tools/make_icons.py`, `tools/build_zico.py`) is only a fallback for icons Petrel
   cannot find on its sheets.
+* Fan frames 166–173 are drawn by native `0x28` animations, i.e. opaque: they need the dashboard
+  colour `0x18C4` instead of black (`tools/fel/zico_tool.py backing in.zico out.zico 0x18C4 166-173`).
+  The shipped `sd-overlay` library already has it.
 * Boot image: `tools/make_boot.py` – keep y 280–350 calm, Petrel draws its progress bar there.
 * Font changes must keep 0.5 em advances (`tools/build_font.py`).
 * Moonraker API is open on the LAN in a default setup; Mainsail preheat presets live in the

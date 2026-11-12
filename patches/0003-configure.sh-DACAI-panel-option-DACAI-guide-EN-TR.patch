@@ -1,7 +1,7 @@
 From c3b936044d68c4067c3f495ddbb06b1a2cf4c0ce Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 00:40:58 +0100
-Subject: [PATCH 3/8] configure.sh: DACAI panel option; DACAI guide (EN/TR)
+Subject: [PATCH 03/10] configure.sh: DACAI panel option; DACAI guide (EN/TR)
 
 Kconfig menu "Display panel" selects DACAI (PETREL_DACAI) and its host UART
 speed (PETREL_DACAI_BAUD: 115200/230400/460800/921600). docs/dacai.md and

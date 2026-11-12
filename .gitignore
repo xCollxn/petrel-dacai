@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 /sd/
 /out/
+# flash backups / file-system images must never be committed (Creality firmware)
+*.bin
+*.zico.bak

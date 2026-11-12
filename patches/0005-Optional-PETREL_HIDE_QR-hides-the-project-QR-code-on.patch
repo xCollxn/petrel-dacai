@@ -1,8 +1,8 @@
 From c8557d2f07dca0c2faa0957ae4ce02cf244e4e76 Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
-Subject: [PATCH 5/8] Optional PETREL_HIDE_QR hides the project QR code on the
- Info page
+Subject: [PATCH 05/10] Optional PETREL_HIDE_QR hides the project QR code on
+ the Info page
 
 ---
  petrel/features/info/qr.py   | 8 ++++++++
