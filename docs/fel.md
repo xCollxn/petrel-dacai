@@ -71,6 +71,13 @@ The F1C100s checks the microSD card **before** its own flash. A card with the sm
    ```
    The card stays a normal FAT32 card. Label it "FEL".
 
+   > **It stays a FEL card after formatting.** Formatting only rewrites the partition; the
+   > program at 8 KB survives. Using the card for a microSD update then keeps the screen black
+   > (it is in FEL mode, `lsusb` shows `1f3a:efe8`) and the update never starts. Use another
+   > card, or clear the area before the partition:
+   > `sudo dd if=/dev/zero of=/dev/mmcblk0 bs=1024 seek=8 count=1016 conv=fsync`
+   > (again: **your card**, and only if its partition starts at 1 MB – check with `sudo fdisk -l`).
+
 ## 4. Enter and leave FEL mode
 
 1. Stop Petrel: `curl -X POST "http://localhost:7125/machine/services/stop?service=Petrel"`

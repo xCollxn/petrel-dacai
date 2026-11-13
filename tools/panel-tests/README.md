@@ -15,5 +15,6 @@ talks to `/dev/ttyAMA0` at 115200 and turns the backlight on with `0x30 FF` wher
 | `aux_test.py` | extended UART `0x38`/`0x39` (no effect on DACAI) |
 | `dacai_native.py` | Dacai's own HMI handshake `EE 04 FF FC FF FF` (no answer) |
 | `rect_extent_test.py up\|left\|down\|right\|copy` | which rows/columns `0x09` and `0x27` really touch (off-by-one on DACAI) |
+| `petrel_scenes.py [--petrel DIR] SCENE…` | draws Petrel's documentation scenes (e.g. MMU, NFC gate views) on the panel through `DacaiDriver` |
 
 `picture_slot_padded.py` writes to the panel's flash – use a free picture slot (Petrel uses 0 and 1).
