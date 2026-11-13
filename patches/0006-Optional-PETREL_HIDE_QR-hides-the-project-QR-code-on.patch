@@ -1,4 +1,4 @@
-From 0fa31768e3d5112fc506c36a89860c8614d0a6d7 Mon Sep 17 00:00:00 2001
+From 8f0578c06bcfcbc6c8187bd2d90c46d76f93d99d Mon Sep 17 00:00:00 2001
 From: petrel-dacai <petrel-dacai@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 17:47:34 +0100
 Subject: [PATCH 06/11] Optional PETREL_HIDE_QR hides the project QR code on

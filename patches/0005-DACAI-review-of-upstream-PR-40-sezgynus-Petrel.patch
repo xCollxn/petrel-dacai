@@ -1,22 +1,27 @@
-From 8e9508ca9c7d0c27a9edf772cda686ce20fa8d44 Mon Sep 17 00:00:00 2001
+From aa00ed0ad07544a594fb77bee1b5c490d44170a1 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
-Date: Fri, 13 Nov 2026 01:34:28 +0100
+Date: Fri, 13 Nov 2026 13:38:47 +0100
 Subject: [PATCH 05/11] DACAI: review of upstream PR #40 (sezgynus/Petrel)
 
-The changes pushed to PR #40 after the upstream review, squashed (the
+The changes pushed to PR #40 after the upstream reviews, squashed (the
 individual commits are on xCollxn/Petrel branch dacai-support):
 
 - DACAI and the DWIN auxiliary UART exclude each other (Kconfig,
   configure.py, install.sh, run.py, driver); migration removes the broker.
 - NFC animation frames on the sprite sheets as patches over the most
   similar earlier frame (grid-aligned, one sheet per animation), 8 sheets.
-- Sprite upload/verification failures are no longer marked as synced.
+- Sprite upload/verification failures are no longer marked as synced;
+  sync_sprites() alone owns the sprite index and the synced flag, so a
+  failed resync also clears both.
+- Petrel's icon library is never drawn with the panel's native 0x23/0x28:
+  without verified sheets its icons and animations are skipped.
 - Emulator/remote display speak the DACAI dialect (PANEL_PROTOCOL).
 - Diagonal 0x03 segments sent as staircases; OPAQUE_SRAM_JPEG capability.
 - Panel probe tries every host speed after an interrupted session.
 - 0x27 copies one row too many and 0x09 left/up is off by one: both
   compensated in DacaiDriver and modelled in the emulator.
-- CI trigger for feature/dacai-support; docs EN/TR updated.
+- CI trigger for feature/dacai-support; docs EN/TR updated, rollback
+  to a known-good DACAI revision instead of master.
 ---
  .github/workflows/dwin-broker-c.yml        |   2 +-
  .github/workflows/dwin-uart.yml            |   2 +-
@@ -24,8 +29,8 @@ individual commits are on xCollxn/Petrel branch dacai-support):
  Kconfig                                    |   6 +-
  docs/configuration.md                      |   2 +
  docs/configuration_TR.md                   |   2 +
- docs/dacai.md                              |  69 ++-
- docs/dacai_TR.md                           |  65 ++-
+ docs/dacai.md                              |  79 ++-
+ docs/dacai_TR.md                           |  75 ++-
  docs/dwin-uart.md                          |   2 +
  docs/dwin-uart_TR.md                       |   2 +
  install.sh                                 |  14 +
@@ -36,13 +41,13 @@ individual commits are on xCollxn/Petrel branch dacai-support):
  petrel/features/files/preview.py           |   3 +
  petrel/features/files/thumbnail_cache.py   |   7 +-
  petrel/features/files/thumbnail_preview.py |  29 +-
- petrel/hardware/dwin/dacai.py              | 199 +++++--
+ petrel/hardware/dwin/dacai.py              | 232 +++++--
  petrel/hardware/dwin/driver.py             |   6 +-
  petrel/hardware/dwin/startup.py            |  15 +-
  run.py                                     |   4 +-
- tests/test_dacai_panel.py                  | 639 ++++++++++++++++++++-
+ tests/test_dacai_panel.py                  | 703 ++++++++++++++++++++-
  tools/configure.py                         |  11 +-
- 24 files changed, 1196 insertions(+), 145 deletions(-)
+ 24 files changed, 1304 insertions(+), 154 deletions(-)
 
 diff --git a/.github/workflows/dwin-broker-c.yml b/.github/workflows/dwin-broker-c.yml
 index 50c1cb6..cee8bd1 100644
@@ -135,14 +140,24 @@ index b881785..6659e7c 100644
  ![Kconfig içinde varsayılan kapalı DWIN yardımcı UART](assets/configuration/auxiliary-uart.png)
  
 diff --git a/docs/dacai.md b/docs/dacai.md
-index fbb2c4b..74011d2 100644
+index fbb2c4b..56fb09a 100644
 --- a/docs/dacai.md
 +++ b/docs/dacai.md
-@@ -26,12 +26,24 @@ copy `firmware.zlib` and the `private` folder from that package to the root of a
+@@ -26,12 +26,34 @@ copy `firmware.zlib` and the `private` folder from that package to the root of a
  
  Run `./configure.sh`, open **Display panel**, check **DACAI panel** and optionally choose a faster **DACAI host UART speed**. Save, exit and confirm Apply. The settings are stored as `PETREL_DACAI=1` and `PETREL_DACAI_BAUD` in `Petrel.env`.
  
-+DACAI support is developed on the `feature/dacai-support` branch. Petrel's installer registers the Moonraker updater for `master`, so it does not follow this branch: on any other branch Moonraker reports the Petrel repository as invalid and offers no updates. Update a test installation with `git pull` in `~/Petrel` and restart `Petrel.service`; `git checkout master` and `./install.sh` return to the regular release.
++DACAI support is developed on the `feature/dacai-support` branch. Petrel's installer registers the Moonraker updater for `master`, so it does not follow this branch: on any other branch Moonraker reports the Petrel repository as invalid and offers no updates. Update a test installation with `git pull` in `~/Petrel` and restart `Petrel.service`.
++
++**Rolling back.** `master` does not support DACAI panels: it does not select the DACAI driver and talks to the panel as a DWIN display. `git checkout master` is therefore **not** a way back for a DACAI panel. Before each update, note the running revision:
++
++```sh
++git -C ~/Petrel rev-parse HEAD
++```
++
++If the update misbehaves, return to that known-good revision with `git -C ~/Petrel checkout <revision>`, run `./install.sh` in `~/Petrel` and restart `Petrel.service`. `git checkout feature/dacai-support` followed by `git pull` resumes testing later.
++
++`git checkout master` and `./install.sh` return to the regular release **only for a printer that is back on a DWIN panel**; uncheck **DACAI panel** in `./configure.sh` before switching.
 +
 +### DWIN auxiliary UART
 +
@@ -164,24 +179,24 @@ index fbb2c4b..74011d2 100644
  
  ## What Petrel uploads
  
-@@ -41,11 +53,13 @@ No microSD card is needed. On the first start Petrel uploads over the UART:
+@@ -41,11 +63,13 @@ No microSD card is needed. On the first start Petrel uploads over the UART:
  |---|---|
  | 0 | Boot artwork |
  | 1 | Shared UI artwork (Info QR regions) |
 -| 16 and up | Icon sprite sheets: the icon library packed onto 272×480 JPEG sheets |
 +| 16 and up | Icon sprite sheets: the complete icon library packed onto 272×480 JPEG sheets (currently 8) |
- 
--The first upload takes about 15 seconds at 460800 baud. Content fingerprints are stored in the panel's Data Flash, so later starts upload only changed pictures.
++
 +Each picture occupies 32 KB of panel storage (about 320 KB in total, of which about 260 KB is new compared with the stock pictures; a panel with the stock files has about 630 KB free). The first upload takes about 20 seconds at 460800 baud and about 40 seconds at 115200 (measured on the reference panel). Content fingerprints are stored in the panel's Data Flash, so later starts upload only changed pictures.
  
--DACAI panels only read icons from their own icon files, which cannot be written over the UART. Petrel therefore draws each icon by copying it from a sprite sheet in virtual display area 1, and steps icon animations (boot progress, fan) from the host. Other Petrel features work unchanged.
+-The first upload takes about 15 seconds at 460800 baud. Content fingerprints are stored in the panel's Data Flash, so later starts upload only changed pictures.
 +DACAI panels only read icons from their own icon files, which cannot be written over the UART. Petrel therefore draws each icon by copying it from a sprite sheet in virtual display area 1, and steps icon animations (boot progress, fan, NFC approach) from the host. Every later frame of the large NFC animations is stored as the most similar earlier frame plus the rectangle that changed, and each of these animations sits on a sheet of its own, which keeps the whole library on 8 sheets. Other Petrel features work unchanged.
-+
+ 
+-DACAI panels only read icons from their own icon files, which cannot be written over the UART. Petrel therefore draws each icon by copying it from a sprite sheet in virtual display area 1, and steps icon animations (boot progress, fan) from the host. Other Petrel features work unchanged.
 +If the upload or its verification fails, Petrel does not mark the artwork as synced: it reports the error like a failed DWIN artwork sync, does not draw from stale sheets, and uploads again on the next start.
  
  ## After a microSD update
  
-@@ -59,13 +73,25 @@ sudo systemctl start Petrel.service
+@@ -59,13 +83,25 @@ sudo systemctl start Petrel.service
  
  Use the UART from your configuration instead of `/dev/ttyS0`.
  
@@ -209,7 +224,7 @@ index fbb2c4b..74011d2 100644
  
  ## For developers
  
-@@ -73,21 +99,32 @@ Use the UART from your configuration instead of `/dev/ttyS0`.
+@@ -73,21 +109,32 @@ Use the UART from your configuration instead of `/dev/ttyS0`.
  unchanged. Keep these points in mind when changing display code:
  
  - **Draw through the driver methods.** `show_icon`, `configure_animation`, `set_animation_mask`,
@@ -250,7 +265,7 @@ index fbb2c4b..74011d2 100644
  
  ## Differences from DWIN T5UIC1
  
-@@ -96,7 +133,9 @@ Measured on the reference panel (Ender 3 Max Neo, board Rev 1.5). The driver is
+@@ -96,7 +143,9 @@ Measured on the reference panel (Ender 3 Max Neo, board Rev 1.5). The driver is
  | Command | DACAI behavior | Driver |
  |---|---|---|
  | `0x24` SRAM JPEG | Not implemented; DACAI `0x70 x y address` draws opaque | Uses `0x70`; thumbnails composed on the UI background at the centre of its RGB565 step, JPEG quality 100 |
@@ -262,14 +277,24 @@ index fbb2c4b..74011d2 100644
  | Icon library | Icon files cannot be written over UART | Sprite sheets + `0x25`/`0x27` |
  | `0x28` animation | Only for the panel's own icon files | Animations stepped by the host |
 diff --git a/docs/dacai_TR.md b/docs/dacai_TR.md
-index fc8714e..52472a1 100644
+index fc8714e..f47aa94 100644
 --- a/docs/dacai_TR.md
 +++ b/docs/dacai_TR.md
-@@ -26,12 +26,24 @@ yazılımla doğrulandı.** İkonlar veya önizlemeler boş kalırsa önce panel
+@@ -26,12 +26,34 @@ yazılımla doğrulandı.** İkonlar veya önizlemeler boş kalırsa önce panel
  
  `./configure.sh` çalıştırın, **Display panel** menüsünü açın, **DACAI panel** seçeneğini işaretleyin ve isterseniz daha hızlı bir **DACAI host UART speed** seçin. Kaydedin, çıkın ve Apply sorusunu onaylayın. Ayarlar `Petrel.env` içinde `PETREL_DACAI=1` ve `PETREL_DACAI_BAUD` olarak saklanır.
  
-+DACAI desteği `feature/dacai-support` dalında geliştirilir. Petrel kurulum betiği Moonraker güncelleyicisini `master` için kaydeder; bu nedenle güncelleyici bu dalı izlemez: başka bir dalda Moonraker Petrel deposunu geçersiz olarak gösterir ve güncelleme sunmaz. Bir test kurulumunu `~/Petrel` içinde `git pull` ile güncelleyin ve `Petrel.service` servisini yeniden başlatın; `git checkout master` ve `./install.sh` normal sürüme geri döndürür.
++DACAI desteği `feature/dacai-support` dalında geliştirilir. Petrel kurulum betiği Moonraker güncelleyicisini `master` için kaydeder; bu nedenle güncelleyici bu dalı izlemez: başka bir dalda Moonraker Petrel deposunu geçersiz olarak gösterir ve güncelleme sunmaz. Bir test kurulumunu `~/Petrel` içinde `git pull` ile güncelleyin ve `Petrel.service` servisini yeniden başlatın.
++
++**Geri dönüş.** `master` DACAI panellerini desteklemez: DACAI sürücüsünü seçmez ve paneli DWIN ekranı olarak sürer. Bu nedenle `git checkout master` bir DACAI paneli için geri dönüş yolu **değildir**. Her güncellemeden önce çalışan sürümü not edin:
++
++```sh
++git -C ~/Petrel rev-parse HEAD
++```
++
++Güncelleme sorun çıkarırsa `git -C ~/Petrel checkout <sürüm>` ile bu bilinen iyi sürüme dönün, `~/Petrel` içinde `./install.sh` çalıştırın ve `Petrel.service` servisini yeniden başlatın. Daha sonra `git checkout feature/dacai-support` ve ardından `git pull` ile teste devam edilir.
++
++`git checkout master` ve `./install.sh` **yalnızca yeniden DWIN paneline geçmiş bir yazıcı için** normal sürüme geri döndürür; geçişten önce `./configure.sh` içinde **DACAI panel** seçeneğini kaldırın.
 +
 +### DWIN yardımcı UART
 +
@@ -291,24 +316,24 @@ index fc8714e..52472a1 100644
  
  ## Petrel'in yüklediği içerik
  
-@@ -41,11 +53,13 @@ microSD kart gerekmez. İlk açılışta Petrel UART üzerinden şunları yükle
+@@ -41,11 +63,13 @@ microSD kart gerekmez. İlk açılışta Petrel UART üzerinden şunları yükle
  |---|---|
  | 0 | Açılış görseli |
  | 1 | Ortak arayüz görseli (Info QR bölgeleri) |
 -| 16 ve üzeri | İkon sprite sayfaları: 272×480 JPEG sayfalarına yerleştirilmiş ikon kütüphanesi |
 +| 16 ve üzeri | İkon sprite sayfaları: 272×480 JPEG sayfalarına yerleştirilmiş ikon kütüphanesinin tamamı (şu anda 8 sayfa) |
- 
--İlk yükleme 460800 baud'da yaklaşık 15 saniye sürer. İçerik parmak izleri panelin Data Flash alanında saklanır; sonraki açılışlarda yalnızca değişen resimler yüklenir.
++
 +Her resim panel belleğinde 32 KB yer kaplar (toplam yaklaşık 320 KB; bunun yaklaşık 260 KB'ı fabrika resimlerine göre yenidir, fabrika dosyalarıyla bir panelde yaklaşık 630 KB boş yer vardır). İlk yükleme 460800 baud'da yaklaşık 20 saniye, 115200 baud'da yaklaşık 40 saniye sürer (referans panelde ölçüldü). İçerik parmak izleri panelin Data Flash alanında saklanır; sonraki açılışlarda yalnızca değişen resimler yüklenir.
  
--DACAI panelleri ikonları yalnızca kendi ikon dosyalarından okur ve bu dosyalar UART üzerinden yazılamaz. Bu yüzden Petrel her ikonu sanal ekran alanı 1'deki bir sprite sayfasından kopyalayarak çizer ve ikon animasyonlarını (açılış ilerlemesi, fan) host tarafında ilerletir. Diğer Petrel özellikleri değişmeden çalışır.
+-İlk yükleme 460800 baud'da yaklaşık 15 saniye sürer. İçerik parmak izleri panelin Data Flash alanında saklanır; sonraki açılışlarda yalnızca değişen resimler yüklenir.
 +DACAI panelleri ikonları yalnızca kendi ikon dosyalarından okur ve bu dosyalar UART üzerinden yazılamaz. Bu yüzden Petrel her ikonu sanal ekran alanı 1'deki bir sprite sayfasından kopyalayarak çizer ve ikon animasyonlarını (açılış ilerlemesi, fan, NFC yaklaşma) host tarafında ilerletir. Büyük NFC animasyonlarının sonraki her karesi, en çok benzeyen önceki kare ile değişen dikdörtgen olarak saklanır ve bu animasyonların her biri kendi sayfasında durur; böylece kütüphanenin tamamı 8 sayfaya sığar. Diğer Petrel özellikleri değişmeden çalışır.
-+
+ 
+-DACAI panelleri ikonları yalnızca kendi ikon dosyalarından okur ve bu dosyalar UART üzerinden yazılamaz. Bu yüzden Petrel her ikonu sanal ekran alanı 1'deki bir sprite sayfasından kopyalayarak çizer ve ikon animasyonlarını (açılış ilerlemesi, fan) host tarafında ilerletir. Diğer Petrel özellikleri değişmeden çalışır.
 +Yükleme veya doğrulaması başarısız olursa Petrel görselleri senkronize olarak işaretlemez: hatayı başarısız bir DWIN görsel senkronu gibi bildirir, eski sayfalardan çizim yapmaz ve bir sonraki açılışta yeniden yükler.
  
  ## microSD güncellemesinden sonra
  
-@@ -59,13 +73,25 @@ sudo systemctl start Petrel.service
+@@ -59,13 +83,25 @@ sudo systemctl start Petrel.service
  
  `/dev/ttyS0` yerine yapılandırmanızdaki UART'ı kullanın.
  
@@ -336,7 +361,7 @@ index fc8714e..52472a1 100644
  
  ## Geliştiriciler için
  
-@@ -73,22 +99,33 @@ sudo systemctl start Petrel.service
+@@ -73,22 +109,33 @@ sudo systemctl start Petrel.service
  değişmeden kalır. Ekran kodunu değiştirirken şu noktalara dikkat edin:
  
  - **Çizimleri sürücü metotları üzerinden yapın.** `show_icon`, `configure_animation`,
@@ -376,7 +401,7 @@ index fc8714e..52472a1 100644
  
  ## DWIN T5UIC1'den farklar
  
-@@ -97,7 +134,9 @@ Referans panelde (Ender 3 Max Neo, kart Rev 1.5) ölçülmüştür. Sürücü `p
+@@ -97,7 +144,9 @@ Referans panelde (Ender 3 Max Neo, kart Rev 1.5) ölçülmüştür. Sürücü `p
  | Komut | DACAI davranışı | Sürücü |
  |---|---|---|
  | `0x24` SRAM JPEG | Uygulanmamış; DACAI `0x70 x y adres` opak çizer | `0x70` kullanır; önizlemeler arayüz arka planına, RGB565 basamağının ortasında, JPEG kalitesi 100 ile yerleştirilir |
@@ -968,7 +993,7 @@ index 1a42eae..5cca384 100644
          jpeg, retryable = None, False
      except Exception as error:
 diff --git a/petrel/hardware/dwin/dacai.py b/petrel/hardware/dwin/dacai.py
-index 64d8dc7..b16b1a6 100644
+index 64d8dc7..b0f8075 100644
 --- a/petrel/hardware/dwin/dacai.py
 +++ b/petrel/hardware/dwin/dacai.py
 @@ -7,14 +7,20 @@ a Max Neo panel; see docs/dacai.md:
@@ -1063,7 +1088,7 @@ index 64d8dc7..b16b1a6 100644
  def picture_payload(data, size=PICTURE_SIZE):
      """Pad a JPEG with a COM segment to exactly ``size`` bytes.
  
-@@ -64,13 +127,17 @@ def picture_payload(data, size=PICTURE_SIZE):
+@@ -64,17 +127,22 @@ def picture_payload(data, size=PICTURE_SIZE):
  
  
  class DacaiDriver(T5UIC1Display):
@@ -1081,7 +1106,12 @@ index 64d8dc7..b16b1a6 100644
          self.host_baud = configured_baud() if host_baud is None else host_baud
          self._sprites = None
          self._sprite_animations = {}
-@@ -82,7 +149,9 @@ class DacaiDriver(T5UIC1Display):
+         self._sprite_mask = 0xFFFF
++        self._assets_synced = False
+         super().__init__(*args, **kwargs)
+ 
+     # ------------------------------------------------------------------
+@@ -82,7 +150,9 @@ class DacaiDriver(T5UIC1Display):
      # ------------------------------------------------------------------
  
      def _after_handshake(self):
@@ -1092,7 +1122,7 @@ index 64d8dc7..b16b1a6 100644
              self._switch_baud(self.host_baud)
  
      def _send_baud(self, baud):
-@@ -99,7 +168,7 @@ class DacaiDriver(T5UIC1Display):
+@@ -99,7 +169,7 @@ class DacaiDriver(T5UIC1Display):
          self._send_baud(target)
          for _ in range(3):
              if self.handshake(.5):
@@ -1101,7 +1131,7 @@ index 64d8dc7..b16b1a6 100644
                  return
          logging.warning('DACAI baud switch to %d failed; staying at %d', target, DEFAULT_BAUD)
          self._send_baud(DEFAULT_BAUD)
-@@ -136,15 +205,62 @@ class DacaiDriver(T5UIC1Display):
+@@ -136,15 +206,62 @@ class DacaiDriver(T5UIC1Display):
          # 0x24 is not implemented; 0x70 draws the SRAM JPEG opaque.
          self._send(0x70, self._words(x, y, address))
  
@@ -1165,23 +1195,27 @@ index 64d8dc7..b16b1a6 100644
      # ------------------------------------------------------------------
      # Icons from sprite sheets
      # ------------------------------------------------------------------
-@@ -162,48 +278,58 @@ class DacaiDriver(T5UIC1Display):
+@@ -162,48 +279,72 @@ class DacaiDriver(T5UIC1Display):
          return None  # First install: draw the boot frame without icons.
  
      def _startup_sync_icons(self):
 +        # Failures propagate like the DWIN icon-library sync: the panel's own
 +        # icon files are not Petrel's, so there is no silent fallback.
          self.sync_sprites()
-         self._assets_synced = True
+-        self._assets_synced = True
  
      def sync_sprites(self, *, force=False):
 -        """Upload changed sheets; ``force`` repairs pictures removed by a microSD update."""
 +        """Upload changed sheets; ``force`` repairs pictures removed by a microSD update.
 +
 +        Raises on any upload or verification failure; the sheets are used only
-+        after their metadata checkpoint has been verified.
++        after their metadata checkpoint has been verified. This method alone
++        owns ``_sprites`` and ``_assets_synced``: both are cleared before any
++        picture is touched and set again only after a verified sync, so a
++        failed resync leaves the driver unsynchronized and without an index.
 +        """
          from petrel.artwork import sprites
++        self._assets_synced = False
          self._sprite_animations.clear()
 -        try:
 -            current = sprites.load()
@@ -1195,26 +1229,39 @@ index 64d8dc7..b16b1a6 100644
 -            logging.exception('Sprite sheet upload failed; using panel icon files')
 -            self._sprites = None
 +        self._sprites = None
++        # Picture slots may be rewritten: reload the sheet before the next copy.
++        self._cached_picture1 = None
 +        current = sprites.load()
-+        if sprites.sync(self, force=force, sprites=current):
-+            self._cached_picture1 = None
++        sprites.sync(self, force=force, sprites=current)
 +        self._sprites = current.index
++        self._assets_synced = True
  
      def show_icon(self, library_id, icon_ids, x, y, *, background=True,
                    restore=False, enhanced=False):
          icons = (icon_ids,) if isinstance(icon_ids, int) else tuple(icon_ids)
 -        if icons and self._draw_sprites(library_id, icons, x, y, background):
-+        if icons and self._sprite_library(library_id):
-+            self._draw_sprites(icons, x, y, background)
++        if not self._managed_library(library_id):
++            super().show_icon(library_id, icon_ids, x, y, background=background,
++                              restore=restore, enhanced=enhanced)
++            return
++        if not icons:
++            raise ValueError("at least one icon ID is required")
++        if self._sprites is None:
++            # No verified sheets: skip rather than draw the panel's own icon
++            # files with 0x23, which do not hold Petrel's artwork.
++            logging.debug('DACAI sprite sheets unavailable; icons %s skipped', icons)
              return
-         super().show_icon(library_id, icon_ids, x, y, background=background,
-                           restore=restore, enhanced=enhanced)
+-        super().show_icon(library_id, icon_ids, x, y, background=background,
+-                          restore=restore, enhanced=enhanced)
++        self._draw_sprites(icons, x, y, background)
  
 -    def _draw_sprites(self, library_id, icons, x, y, background):
 -        """Copy icons from their sheets in a row; False leaves the call to 0x23."""
-+    def _sprite_library(self, library_id):
++    @staticmethod
++    def _managed_library(library_id):
++        """Petrel's own library: always drawn from the sprite sheets, never natively."""
          from petrel.artwork.resources import ICON_LIBRARY_ID
-+        return self._sprites is not None and library_id == ICON_LIBRARY_ID
++        return library_id == ICON_LIBRARY_ID
 +
 +    def _draw_sprites(self, icons, x, y, background):
 +        """Copy icons from their sheets in a row; False if any icon is missing.
@@ -1250,20 +1297,31 @@ index 64d8dc7..b16b1a6 100644
  
      def configure_animation(self, animation_id, enabled, library_id,
                              first_icon, last_icon, x, y, interval,
-@@ -222,14 +348,20 @@ class DacaiDriver(T5UIC1Display):
+@@ -221,15 +362,29 @@ class DacaiDriver(T5UIC1Display):
+ 
      def _sprite_animation(self, animation_id, enabled, library_id, first_icon, last_icon,
                            x, y, interval, restart_from_first):
-         """Host-side replacement for 0x28 while icons come from sprite sheets."""
+-        """Host-side replacement for 0x28 while icons come from sprite sheets."""
 -        from petrel.artwork.resources import ICON_LIBRARY_ID
 -        if self._sprites is None or library_id != ICON_LIBRARY_ID:
-+        if not self._sprite_library(library_id):
++        """Host-side replacement for 0x28 for the managed library.
++
++        Returns False only for other libraries. Requests for the managed
++        library never reach 0x28: without verified sheets they are dropped.
++        """
++        if not self._managed_library(library_id):
              return False
          if not 0 <= animation_id <= 15:
              raise ValueError('animation ID must be 0..15')
          frames = range(first_icon, last_icon + 1)
 -        if not frames or any(icon not in self._sprites for icon in frames):
-+        if not frames:
-             return False
+-            return False
++        if self._sprites is None or not frames:
++            if enabled:
++                logging.debug('DACAI animation %d skipped: no sprite sheets or frames',
++                              animation_id)
++            self._sprite_animations.pop(animation_id, None)
++            return True
 +        missing = [icon for icon in frames if icon not in self._sprites]
 +        if missing:
 +            # Never fall back to 0x28: the native icon files are not Petrel's.
@@ -1274,7 +1332,7 @@ index 64d8dc7..b16b1a6 100644
          previous = self._sprite_animations.pop(animation_id, None)
          if not enabled:
              return True
-@@ -253,8 +385,7 @@ class DacaiDriver(T5UIC1Display):
+@@ -253,8 +408,7 @@ class DacaiDriver(T5UIC1Display):
              if not (self._sprite_mask >> animation_id) & 1:
                  continue
              if now >= animation['due']:
@@ -1358,7 +1416,7 @@ index 3254cc7..566801f 100644
      return args
  
 diff --git a/tests/test_dacai_panel.py b/tests/test_dacai_panel.py
-index b98ae31..f4966e9 100644
+index b98ae31..28ac472 100644
 --- a/tests/test_dacai_panel.py
 +++ b/tests/test_dacai_panel.py
 @@ -1,19 +1,27 @@
@@ -1393,7 +1451,15 @@ index b98ae31..f4966e9 100644
  
  
  def dacai_driver():
-@@ -31,6 +39,10 @@ def sent(lcd):
+@@ -23,6 +31,7 @@ def dacai_driver():
+     lcd._sprites = None
+     lcd._sprite_animations = {}
+     lcd._sprite_mask = 0xFFFF
++    lcd._assets_synced = False
+     return lcd
+ 
+ 
+@@ -31,6 +40,10 @@ def sent(lcd):
      return [(frame[1], frame[2:-4]) for frame in lcd.serial.frames]
  
  
@@ -1404,7 +1470,7 @@ index b98ae31..f4966e9 100644
  class DacaiSelectionTests(unittest.TestCase):
      def test_panel_type_and_baud_come_from_configuration(self):
          with patch.dict('os.environ', {'PETREL_DACAI': '1', 'PETREL_DACAI_BAUD': '460800'}):
-@@ -43,10 +55,16 @@ class DacaiSelectionTests(unittest.TestCase):
+@@ -43,10 +56,16 @@ class DacaiSelectionTests(unittest.TestCase):
      def test_dwin_limits_are_unchanged(self):
          self.assertEqual(T5UIC1Display.PICTURE_ID_MAX, 15)
          self.assertFalse(T5UIC1Display.BARE_FLASH_ACK)
@@ -1421,7 +1487,7 @@ index b98ae31..f4966e9 100644
  
  class BareFlashAckTests(unittest.TestCase):
      def test_bare_ack_only_when_enabled(self):
-@@ -85,6 +103,27 @@ class DacaiProtocolTests(unittest.TestCase):
+@@ -85,6 +104,27 @@ class DacaiProtocolTests(unittest.TestCase):
          lcd.copy_cache(1, 0, 0, 9, 9, 5, 5, background=False, enhanced=False)
          self.assertEqual([payload[0] for _, payload in sent(lcd)], [0x01, 0x81])
  
@@ -1449,7 +1515,7 @@ index b98ae31..f4966e9 100644
      def test_backlight_is_scaled_to_firmware_range(self):
          lcd = dacai_driver()
          for value in (0, 1, 128, 255):
-@@ -97,6 +136,141 @@ class DacaiProtocolTests(unittest.TestCase):
+@@ -97,6 +137,141 @@ class DacaiProtocolTests(unittest.TestCase):
          self.assertEqual(sent(lcd), [(0x25, bytes((1, 200)))])
  
  
@@ -1591,7 +1657,7 @@ index b98ae31..f4966e9 100644
  class DacaiBaudTests(unittest.TestCase):
      def link(self, answers):
          lcd = dacai_driver()
-@@ -119,22 +293,50 @@ class DacaiBaudTests(unittest.TestCase):
+@@ -119,22 +294,50 @@ class DacaiBaudTests(unittest.TestCase):
          self.assertEqual(lcd.serial.baudrate, 115200)
          self.assertEqual(lcd._send.call_args_list[-1].args, (0x38, lcd._word(136)))
  
@@ -1649,7 +1715,7 @@ index b98ae31..f4966e9 100644
  
  
  class SpritePackingTests(unittest.TestCase):
-@@ -159,10 +361,33 @@ class SpritePackingTests(unittest.TestCase):
+@@ -159,10 +362,33 @@ class SpritePackingTests(unittest.TestCase):
              sprites.pack({1: (300, 20)})
  
  
@@ -1683,7 +1749,7 @@ index b98ae31..f4966e9 100644
  
      def test_every_sheet_is_a_storable_baseline_420_picture(self):
          self.assertLessEqual(len(self.set.payloads), sprites.MAX_SHEETS)
-@@ -174,10 +399,81 @@ class SpriteBuildTests(unittest.TestCase):
+@@ -174,10 +400,81 @@ class SpriteBuildTests(unittest.TestCase):
                  self.assertFalse(image.info.get('progressive'))
                  self.assertEqual(JpegImagePlugin.get_sampling(image), 2)
  
@@ -1767,7 +1833,7 @@ index b98ae31..f4966e9 100644
  
      def test_metadata_round_trip_and_corruption(self):
          raw = sprites.metadata(self.set.digests)
-@@ -204,13 +500,14 @@ class FakeFlashLcd:
+@@ -204,13 +501,14 @@ class FakeFlashLcd:
          self.flash = stored
          self.events = []
          self.serial = self
@@ -1783,7 +1849,7 @@ index b98ae31..f4966e9 100644
  
      def prepare_picture(self, data):
          return dacai.picture_payload(data)
-@@ -258,18 +555,78 @@ class SpriteSyncTests(unittest.TestCase):
+@@ -258,18 +556,114 @@ class SpriteSyncTests(unittest.TestCase):
          self.assertEqual(len([e for e in lcd.events if e[0] == 'store']), 2)
  
  
@@ -1806,35 +1872,71 @@ index b98ae31..f4966e9 100644
 +                patch('petrel.artwork.sprites.time.sleep'):
 +            self.lcd._startup_sync_icons()
 +
++    def resync(self):
++        with patch('petrel.artwork.sprites.load', return_value=self.set), \
++                patch('petrel.artwork.sprites.time.sleep'):
++            self.lcd.sync_sprites(force=True)
++
++    def assert_unsynchronized_and_silent(self):
++        """No index, not synchronized, and managed artwork never reaches 0x23/0x27/0x28."""
++        self.assertFalse(self.lcd._assets_synced)
++        self.assertIsNone(self.lcd._sprites)
++        before = len(sent(self.lcd))
++        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++        self.lcd.show_icon(ICON_LIBRARY_ID, (7, 7), 0, 0)
++        self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 7, 0, 0, 10)
++        self.lcd.configure_animation(1, False, ICON_LIBRARY_ID, 7, 7, 0, 0, 10)
++        self.assertEqual(sent(self.lcd)[before:], [])
++        self.assertEqual(self.lcd._sprite_animations, {})
++        self.assertIsNone(self.lcd.poll_host_animations(10))
++
 +    def test_failed_metadata_verification_fails_startup(self):
 +        self.flash.corrupt_writes = True
 +        with self.assertRaisesRegex(RuntimeError, 'metadata verification failed'):
 +            self.sync()
-+        self.assertFalse(getattr(self.lcd, '_assets_synced', False))
-+        self.assertIsNone(self.lcd._sprites)
-+        # Icons are not silently drawn from the panel's own icon files.
-+        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
-+        self.assertNotIn(0x27, [op for op, _ in sent(self.lcd)])
++        self.assert_unsynchronized_and_silent()
 +
 +    def test_failed_upload_fails_startup(self):
 +        self.lcd.store_sram_as_picture = Mock(side_effect=TimeoutError('no ack'))
 +        with self.assertRaises(TimeoutError):
 +            self.sync()
-+        self.assertFalse(getattr(self.lcd, '_assets_synced', False))
-+        self.assertIsNone(self.lcd._sprites)
++        self.assert_unsynchronized_and_silent()
 +
 +    def test_verified_upload_marks_assets_synchronized(self):
 +        self.sync()
 +        self.assertTrue(self.lcd._assets_synced)
 +        self.assertEqual(self.lcd._sprites, self.set.index)
 +
-+    def test_failed_resync_drops_the_previous_sheets(self):
++    def test_failed_resync_clears_the_previous_synchronized_state(self):
++        self.sync()
++        self.assertTrue(self.lcd._assets_synced)
++        self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 7, 0, 0, 10)
++        self.assertIn(1, self.lcd._sprite_animations)
++        self.flash.corrupt_writes = True
++        with self.assertRaisesRegex(RuntimeError, 'metadata verification failed'):
++            self.resync()
++        self.assert_unsynchronized_and_silent()
++
++    def test_resync_failing_before_upload_clears_the_state(self):
++        self.sync()
++        with patch('petrel.artwork.sprites.load', side_effect=OSError('sheets missing')), \
++                self.assertRaises(OSError):
++            self.lcd.sync_sprites(force=True)
++        self.assert_unsynchronized_and_silent()
++
++    def test_successful_resync_restores_the_state(self):
 +        self.sync()
 +        self.flash.corrupt_writes = True
-+        with patch('petrel.artwork.sprites.load', return_value=self.set), \
-+                patch('petrel.artwork.sprites.time.sleep'), self.assertRaises(RuntimeError):
-+            self.lcd.sync_sprites(force=True)
-+        self.assertIsNone(self.lcd._sprites)
++        with self.assertRaises(RuntimeError):
++            self.resync()
++        self.flash.corrupt_writes = False
++        self.resync()
++        self.assertTrue(self.lcd._assets_synced)
++        self.assertEqual(self.lcd._sprites, self.set.index)
++        before = len(sent(self.lcd))
++        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++        # The sheet is reloaded (0x25) because the resync may have rewritten its slot.
++        self.assertEqual([op for op, _ in sent(self.lcd)[before:]], [0x25, 0x27])
 +
 +
  class SpriteDrawingTests(unittest.TestCase):
@@ -1865,7 +1967,7 @@ index b98ae31..f4966e9 100644
  
      def test_sheet_is_loaded_only_when_it_changes(self):
          self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
-@@ -277,12 +634,16 @@ class SpriteDrawingTests(unittest.TestCase):
+@@ -277,12 +671,23 @@ class SpriteDrawingTests(unittest.TestCase):
          self.lcd.show_icon(ICON_LIBRARY_ID, 9, 0, 0)
          self.assertEqual([op for op, _ in sent(self.lcd)], [0x25, 0x27, 0x27, 0x25, 0x27])
  
@@ -1876,31 +1978,53 @@ index b98ae31..f4966e9 100644
 +            self.lcd.show_icon(ICON_LIBRARY_ID, (99, 7), 0, 0)
 +        self.assertEqual([op for op, _ in sent(self.lcd)], [0x25, 0x27])
 +
-+    def test_other_library_or_no_sheets_use_0x23(self):
++    def test_other_libraries_use_0x23_with_or_without_sheets(self):
          self.lcd.show_icon(9, 7, 0, 0)
          self.lcd._sprites = None
-         self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
+-        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
 -        self.assertEqual([op for op, _ in sent(self.lcd)], [0x23, 0x23, 0x23])
++        self.lcd.show_icon(9, 7, 0, 0)
 +        self.assertEqual([op for op, _ in sent(self.lcd)], [0x23, 0x23])
++
++    def test_managed_library_without_sheets_draws_nothing(self):
++        self.lcd._sprites = None
++        self.lcd.show_icon(ICON_LIBRARY_ID, (7, 8), 0, 0)
++        self.assertEqual(sent(self.lcd), [])
++        with self.assertRaises(ValueError):
++            self.lcd.show_icon(ICON_LIBRARY_ID, (), 0, 0)
  
      def test_animation_is_stepped_by_host_and_wraps(self):
          with patch('petrel.hardware.dwin.dacai.time.monotonic', return_value=100.0):
-@@ -308,23 +669,158 @@ class SpriteDrawingTests(unittest.TestCase):
+@@ -308,23 +713,170 @@ class SpriteDrawingTests(unittest.TestCase):
          self.assertIsNone(self.lcd.poll_host_animations(5))
          self.assertEqual(self.lcd._sprite_animations[2]['frame'], 7)
  
+-    def test_animation_without_sheets_uses_panel_0x28(self):
 +    def test_animation_with_missing_frames_never_uses_panel_0x28(self):
 +        with self.assertLogs(level='WARNING'):
 +            self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 12, 0, 0, 10)
 +        self.assertEqual(sent(self.lcd), [])
 +        self.assertEqual(self.lcd._sprite_animations, {})
 +
-     def test_animation_without_sheets_uses_panel_0x28(self):
++    def test_managed_animation_without_sheets_is_dropped(self):
++        self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
          self.lcd._sprites = None
          self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
-         self.assertEqual([op for op, _ in sent(self.lcd)], [0x28])
- 
- 
+-        self.assertEqual([op for op, _ in sent(self.lcd)], [0x28])
++        self.assertNotIn(0x28, [op for op, _ in sent(self.lcd)])
++        self.assertEqual(self.lcd._sprite_animations, {})
++
++    def test_managed_animation_with_empty_range_never_uses_panel_0x28(self):
++        self.lcd.configure_animation(2, True, ICON_LIBRARY_ID, 8, 7, 0, 0, 10)
++        self.assertEqual(sent(self.lcd), [])
++
++    def test_other_library_animation_uses_panel_0x28_with_or_without_sheets(self):
++        self.lcd.configure_animation(1, True, 9, 7, 8, 0, 0, 10)
++        self.lcd._sprites = None
++        self.lcd.configure_animation(1, True, 9, 7, 8, 0, 0, 10)
++        self.assertEqual([op for op, _ in sent(self.lcd)], [0x28, 0x28])
++
++
 +class HostNfcReaderTests(unittest.TestCase):
 +    """NFC readers on the host (UART, I2C, SPI, USB) need no display auxiliary UART."""
 +
@@ -2028,8 +2152,8 @@ index b98ae31..f4966e9 100644
 +        self.assertEqual(emulator.model.protocol, 'dwin')
 +        with self.assertRaises(ValueError):
 +            emulator.model.reset(protocol='other')
-+
-+
+ 
+ 
  class OpaqueThumbnailTests(unittest.TestCase):
 -    def thumb(self, size, dacai_on):
 +    def thumb(self, size, opaque):
@@ -2048,7 +2172,7 @@ index b98ae31..f4966e9 100644
          from petrel.ui.theme import BACKGROUND_COLOR
          corner = self.thumb(128, True).getpixel((2, 2))
          rgb565 = ((corner[0] >> 3) << 11) | ((corner[1] >> 2) << 5) | (corner[2] >> 3)
-@@ -336,6 +832,22 @@ class OpaqueThumbnailTests(unittest.TestCase):
+@@ -336,11 +888,27 @@ class OpaqueThumbnailTests(unittest.TestCase):
          centre_edge = tile.getpixel((44, 4))
          self.assertGreater(max(centre_edge), 30)
  
@@ -2071,13 +2195,19 @@ index b98ae31..f4966e9 100644
  
  class DacaiConfigurationTests(unittest.TestCase):
      def test_kconfig_round_trip_and_baud_validation(self):
-@@ -351,6 +863,85 @@ class DacaiConfigurationTests(unittest.TestCase):
+         from tools.configure import Configuration, collect, defaults, render_env, validate
+-        values = defaults(Path('/home/pi'))
++        values = defaults(Path(tempfile.gettempdir()).resolve())
+         values.update(PETREL_DACAI='y', PETREL_DACAI_BAUD='460800')
+         validate(values)
+         self.assertEqual(collect(Configuration(ROOT, values))['PETREL_DACAI_BAUD'], '460800')
+@@ -351,6 +919,85 @@ class DacaiConfigurationTests(unittest.TestCase):
          with self.assertRaises(ValueError):
              validate(values)
  
 +    def test_dacai_and_auxiliary_uart_are_mutually_exclusive(self):
 +        from tools.configure import Configuration, collect, defaults, validate
-+        values = defaults(Path('/home/pi'))
++        values = defaults(Path(tempfile.gettempdir()).resolve())
 +        values.update(PETREL_DACAI='y', PETREL_AUX_UART='y')
 +        with self.assertRaisesRegex(ValueError, 'auxiliary UART'):
 +            validate(values)

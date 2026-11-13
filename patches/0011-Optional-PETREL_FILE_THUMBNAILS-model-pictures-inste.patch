@@ -1,4 +1,4 @@
-From 36437db45e3417c7abed265b4e222a873af5cdb4 Mon Sep 17 00:00:00 2001
+From 6f4f65e548570eb24883e1b72a875d5c0f2a35c4 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 01:54:26 +0100
 Subject: [PATCH 11/11] Optional PETREL_FILE_THUMBNAILS: model pictures instead

@@ -176,10 +176,10 @@ index 4c8111a..6659e7c 100644
  
 diff --git a/docs/dacai.md b/docs/dacai.md
 new file mode 100644
-index 0000000..74011d2
+index 0000000..56fb09a
 --- /dev/null
 +++ b/docs/dacai.md
-@@ -0,0 +1,145 @@
+@@ -0,0 +1,155 @@
 +# DACAI panels
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Documentation](README.md)
@@ -208,7 +208,17 @@ index 0000000..74011d2
 +
 +Run `./configure.sh`, open **Display panel**, check **DACAI panel** and optionally choose a faster **DACAI host UART speed**. Save, exit and confirm Apply. The settings are stored as `PETREL_DACAI=1` and `PETREL_DACAI_BAUD` in `Petrel.env`.
 +
-+DACAI support is developed on the `feature/dacai-support` branch. Petrel's installer registers the Moonraker updater for `master`, so it does not follow this branch: on any other branch Moonraker reports the Petrel repository as invalid and offers no updates. Update a test installation with `git pull` in `~/Petrel` and restart `Petrel.service`; `git checkout master` and `./install.sh` return to the regular release.
++DACAI support is developed on the `feature/dacai-support` branch. Petrel's installer registers the Moonraker updater for `master`, so it does not follow this branch: on any other branch Moonraker reports the Petrel repository as invalid and offers no updates. Update a test installation with `git pull` in `~/Petrel` and restart `Petrel.service`.
++
++**Rolling back.** `master` does not support DACAI panels: it does not select the DACAI driver and talks to the panel as a DWIN display. `git checkout master` is therefore **not** a way back for a DACAI panel. Before each update, note the running revision:
++
++```sh
++git -C ~/Petrel rev-parse HEAD
++```
++
++If the update misbehaves, return to that known-good revision with `git -C ~/Petrel checkout <revision>`, run `./install.sh` in `~/Petrel` and restart `Petrel.service`. `git checkout feature/dacai-support` followed by `git pull` resumes testing later.
++
++`git checkout master` and `./install.sh` return to the regular release **only for a printer that is back on a DWIN panel**; uncheck **DACAI panel** in `./configure.sh` before switching.
 +
 +### DWIN auxiliary UART
 +
@@ -327,10 +337,10 @@ index 0000000..74011d2
 +| `0x39`/`0x3A` | Not implemented | No auxiliary UART |
 diff --git a/docs/dacai_TR.md b/docs/dacai_TR.md
 new file mode 100644
-index 0000000..52472a1
+index 0000000..f47aa94
 --- /dev/null
 +++ b/docs/dacai_TR.md
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,156 @@
 +# DACAI panelleri
 +
 +[English](dacai.md) · [Türkçe](dacai_TR.md) · [Dokümantasyon](README_TR.md)
@@ -359,7 +369,17 @@ index 0000000..52472a1
 +
 +`./configure.sh` çalıştırın, **Display panel** menüsünü açın, **DACAI panel** seçeneğini işaretleyin ve isterseniz daha hızlı bir **DACAI host UART speed** seçin. Kaydedin, çıkın ve Apply sorusunu onaylayın. Ayarlar `Petrel.env` içinde `PETREL_DACAI=1` ve `PETREL_DACAI_BAUD` olarak saklanır.
 +
-+DACAI desteği `feature/dacai-support` dalında geliştirilir. Petrel kurulum betiği Moonraker güncelleyicisini `master` için kaydeder; bu nedenle güncelleyici bu dalı izlemez: başka bir dalda Moonraker Petrel deposunu geçersiz olarak gösterir ve güncelleme sunmaz. Bir test kurulumunu `~/Petrel` içinde `git pull` ile güncelleyin ve `Petrel.service` servisini yeniden başlatın; `git checkout master` ve `./install.sh` normal sürüme geri döndürür.
++DACAI desteği `feature/dacai-support` dalında geliştirilir. Petrel kurulum betiği Moonraker güncelleyicisini `master` için kaydeder; bu nedenle güncelleyici bu dalı izlemez: başka bir dalda Moonraker Petrel deposunu geçersiz olarak gösterir ve güncelleme sunmaz. Bir test kurulumunu `~/Petrel` içinde `git pull` ile güncelleyin ve `Petrel.service` servisini yeniden başlatın.
++
++**Geri dönüş.** `master` DACAI panellerini desteklemez: DACAI sürücüsünü seçmez ve paneli DWIN ekranı olarak sürer. Bu nedenle `git checkout master` bir DACAI paneli için geri dönüş yolu **değildir**. Her güncellemeden önce çalışan sürümü not edin:
++
++```sh
++git -C ~/Petrel rev-parse HEAD
++```
++
++Güncelleme sorun çıkarırsa `git -C ~/Petrel checkout <sürüm>` ile bu bilinen iyi sürüme dönün, `~/Petrel` içinde `./install.sh` çalıştırın ve `Petrel.service` servisini yeniden başlatın. Daha sonra `git checkout feature/dacai-support` ve ardından `git pull` ile teste devam edilir.
++
++`git checkout master` ve `./install.sh` **yalnızca yeniden DWIN paneline geçmiş bir yazıcı için** normal sürüme geri döndürür; geçişten önce `./configure.sh` içinde **DACAI panel** seçeneğini kaldırın.
 +
 +### DWIN yardımcı UART
 +
@@ -1606,10 +1626,10 @@ index a4d9f84..17a5aa3 100644
      if action=='historical_result': return feature_icon(value.get('feature',''),value.get('device'))
 diff --git a/petrel/hardware/dwin/dacai.py b/petrel/hardware/dwin/dacai.py
 new file mode 100644
-index 0000000..afa41b2
+index 0000000..8f80c99
 --- /dev/null
 +++ b/petrel/hardware/dwin/dacai.py
-@@ -0,0 +1,420 @@
+@@ -0,0 +1,450 @@
 +"""DACAI panels that emulate the DWIN T5UIC1 protocol (e.g. Ender 3 Max Neo).
 +
 +Creality ships some printers with a Guangzhou DACAI panel (Allwinner F1C100s,
@@ -1757,6 +1777,7 @@ index 0000000..afa41b2
 +        self._sprites = None
 +        self._sprite_animations = {}
 +        self._sprite_mask = 0xFFFF
++        self._assets_synced = False
 +        super().__init__(*args, **kwargs)
 +
 +    # ------------------------------------------------------------------
@@ -1902,12 +1923,13 @@ index 0000000..afa41b2
 +            self._forget_sprites()
 +        else:
 +            self.sync_sprites()
-+        self._assets_synced = True
 +
 +    def _forget_sprites(self):
 +        """Panel icon files in use: invalidate the sprite checkpoint, so switching
 +        back uploads every sheet again (the pictures may have been removed)."""
 +        from petrel.artwork import sprites
++        self._assets_synced = False
++        self._sprite_animations.clear()
 +        self._sprites = None
 +        raw = self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE)
 +        if sprites.parse_metadata(raw):
@@ -1916,33 +1938,53 @@ index 0000000..afa41b2
 +            if self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE) != blank:
 +                raise RuntimeError('Sprite metadata invalidation failed')
 +            logging.info('Panel icon files in use; sprite checkpoint cleared')
++        self._assets_synced = True
 +
 +    def sync_sprites(self, *, force=False):
 +        """Upload changed sheets; ``force`` repairs pictures removed by a microSD update.
 +
 +        Raises on any upload or verification failure; the sheets are used only
-+        after their metadata checkpoint has been verified.
++        after their metadata checkpoint has been verified. This method alone
++        owns ``_sprites`` and ``_assets_synced``: both are cleared before any
++        picture is touched and set again only after a verified sync, so a
++        failed resync leaves the driver unsynchronized and without an index.
 +        """
 +        from petrel.artwork import sprites
++        self._assets_synced = False
 +        self._sprite_animations.clear()
 +        self._sprites = None
++        # Picture slots may be rewritten: reload the sheet before the next copy.
++        self._cached_picture1 = None
 +        current = sprites.load()
-+        if sprites.sync(self, force=force, sprites=current):
-+            self._cached_picture1 = None
++        sprites.sync(self, force=force, sprites=current)
 +        self._sprites = current.index
++        self._assets_synced = True
 +
 +    def show_icon(self, library_id, icon_ids, x, y, *, background=True,
 +                  restore=False, enhanced=False):
 +        icons = (icon_ids,) if isinstance(icon_ids, int) else tuple(icon_ids)
-+        if icons and self._sprite_library(library_id):
-+            self._draw_sprites(icons, x, y, background)
++        if not self._managed_library(library_id):
++            super().show_icon(library_id, icon_ids, x, y, background=background,
++                              restore=restore, enhanced=enhanced)
 +            return
-+        super().show_icon(library_id, icon_ids, x, y, background=background,
-+                          restore=restore, enhanced=enhanced)
++        if not icons:
++            raise ValueError("at least one icon ID is required")
++        if self._sprites is None:
++            # No verified sheets: skip rather than draw the panel's own icon
++            # files with 0x23, which do not hold Petrel's artwork.
++            logging.debug('DACAI sprite sheets unavailable; icons %s skipped', icons)
++            return
++        self._draw_sprites(icons, x, y, background)
 +
-+    def _sprite_library(self, library_id):
++    @staticmethod
++    def _managed_library(library_id):
++        """Petrel's own library: always drawn from the sprite sheets, never natively.
++
++        With PETREL_DACAI_PANEL_ICONS the panel's icon/2.zico holds Petrel's
++        library, so it is drawn with the native 0x23/0x28 like any other.
++        """
 +        from petrel.artwork.resources import ICON_LIBRARY_ID
-+        return self._sprites is not None and library_id == ICON_LIBRARY_ID
++        return not PANEL_ICONS and library_id == ICON_LIBRARY_ID
 +
 +    def _draw_sprites(self, icons, x, y, background):
 +        """Copy icons from their sheets in a row; False if any icon is missing.
@@ -1981,14 +2023,22 @@ index 0000000..afa41b2
 +
 +    def _sprite_animation(self, animation_id, enabled, library_id, first_icon, last_icon,
 +                          x, y, interval, restart_from_first):
-+        """Host-side replacement for 0x28 while icons come from sprite sheets."""
-+        if not self._sprite_library(library_id):
++        """Host-side replacement for 0x28 for the managed library.
++
++        Returns False only for other libraries. Requests for the managed
++        library never reach 0x28: without verified sheets they are dropped.
++        """
++        if not self._managed_library(library_id):
 +            return False
 +        if not 0 <= animation_id <= 15:
 +            raise ValueError('animation ID must be 0..15')
 +        frames = range(first_icon, last_icon + 1)
-+        if not frames:
-+            return False
++        if self._sprites is None or not frames:
++            if enabled:
++                logging.debug('DACAI animation %d skipped: no sprite sheets or frames',
++                              animation_id)
++            self._sprite_animations.pop(animation_id, None)
++            return True
 +        missing = [icon for icon in frames if icon not in self._sprites]
 +        if missing:
 +            # Never fall back to 0x28: the native icon files are not Petrel's.
@@ -2231,10 +2281,10 @@ index f96facf..957f00c 100644
          lcd.write_flash.side_effect = lambda address, data: flash.update({address: data})
 diff --git a/tests/test_dacai_panel.py b/tests/test_dacai_panel.py
 new file mode 100644
-index 0000000..9319446
+index 0000000..c011467
 --- /dev/null
 +++ b/tests/test_dacai_panel.py
-@@ -0,0 +1,964 @@
+@@ -0,0 +1,1026 @@
 +import io
 +import os
 +from pathlib import Path
@@ -2268,6 +2318,7 @@ index 0000000..9319446
 +    lcd._sprites = None
 +    lcd._sprite_animations = {}
 +    lcd._sprite_mask = 0xFFFF
++    lcd._assets_synced = False
 +    return lcd
 +
 +
@@ -2811,35 +2862,71 @@ index 0000000..9319446
 +                patch('petrel.artwork.sprites.time.sleep'):
 +            self.lcd._startup_sync_icons()
 +
++    def resync(self):
++        with patch('petrel.artwork.sprites.load', return_value=self.set), \
++                patch('petrel.artwork.sprites.time.sleep'):
++            self.lcd.sync_sprites(force=True)
++
++    def assert_unsynchronized_and_silent(self):
++        """No index, not synchronized, and managed artwork never reaches 0x23/0x27/0x28."""
++        self.assertFalse(self.lcd._assets_synced)
++        self.assertIsNone(self.lcd._sprites)
++        before = len(sent(self.lcd))
++        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++        self.lcd.show_icon(ICON_LIBRARY_ID, (7, 7), 0, 0)
++        self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 7, 0, 0, 10)
++        self.lcd.configure_animation(1, False, ICON_LIBRARY_ID, 7, 7, 0, 0, 10)
++        self.assertEqual(sent(self.lcd)[before:], [])
++        self.assertEqual(self.lcd._sprite_animations, {})
++        self.assertIsNone(self.lcd.poll_host_animations(10))
++
 +    def test_failed_metadata_verification_fails_startup(self):
 +        self.flash.corrupt_writes = True
 +        with self.assertRaisesRegex(RuntimeError, 'metadata verification failed'):
 +            self.sync()
-+        self.assertFalse(getattr(self.lcd, '_assets_synced', False))
-+        self.assertIsNone(self.lcd._sprites)
-+        # Icons are not silently drawn from the panel's own icon files.
-+        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
-+        self.assertNotIn(0x27, [op for op, _ in sent(self.lcd)])
++        self.assert_unsynchronized_and_silent()
 +
 +    def test_failed_upload_fails_startup(self):
 +        self.lcd.store_sram_as_picture = Mock(side_effect=TimeoutError('no ack'))
 +        with self.assertRaises(TimeoutError):
 +            self.sync()
-+        self.assertFalse(getattr(self.lcd, '_assets_synced', False))
-+        self.assertIsNone(self.lcd._sprites)
++        self.assert_unsynchronized_and_silent()
 +
 +    def test_verified_upload_marks_assets_synchronized(self):
 +        self.sync()
 +        self.assertTrue(self.lcd._assets_synced)
 +        self.assertEqual(self.lcd._sprites, self.set.index)
 +
-+    def test_failed_resync_drops_the_previous_sheets(self):
++    def test_failed_resync_clears_the_previous_synchronized_state(self):
++        self.sync()
++        self.assertTrue(self.lcd._assets_synced)
++        self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 7, 0, 0, 10)
++        self.assertIn(1, self.lcd._sprite_animations)
++        self.flash.corrupt_writes = True
++        with self.assertRaisesRegex(RuntimeError, 'metadata verification failed'):
++            self.resync()
++        self.assert_unsynchronized_and_silent()
++
++    def test_resync_failing_before_upload_clears_the_state(self):
++        self.sync()
++        with patch('petrel.artwork.sprites.load', side_effect=OSError('sheets missing')), \
++                self.assertRaises(OSError):
++            self.lcd.sync_sprites(force=True)
++        self.assert_unsynchronized_and_silent()
++
++    def test_successful_resync_restores_the_state(self):
 +        self.sync()
 +        self.flash.corrupt_writes = True
-+        with patch('petrel.artwork.sprites.load', return_value=self.set), \
-+                patch('petrel.artwork.sprites.time.sleep'), self.assertRaises(RuntimeError):
-+            self.lcd.sync_sprites(force=True)
-+        self.assertIsNone(self.lcd._sprites)
++        with self.assertRaises(RuntimeError):
++            self.resync()
++        self.flash.corrupt_writes = False
++        self.resync()
++        self.assertTrue(self.lcd._assets_synced)
++        self.assertEqual(self.lcd._sprites, self.set.index)
++        before = len(sent(self.lcd))
++        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++        # The sheet is reloaded (0x25) because the resync may have rewritten its slot.
++        self.assertEqual([op for op, _ in sent(self.lcd)[before:]], [0x25, 0x27])
 +
 +
 +class SpriteDrawingTests(unittest.TestCase):
@@ -2876,11 +2963,18 @@ index 0000000..9319446
 +            self.lcd.show_icon(ICON_LIBRARY_ID, (99, 7), 0, 0)
 +        self.assertEqual([op for op, _ in sent(self.lcd)], [0x25, 0x27])
 +
-+    def test_other_library_or_no_sheets_use_0x23(self):
++    def test_other_libraries_use_0x23_with_or_without_sheets(self):
 +        self.lcd.show_icon(9, 7, 0, 0)
 +        self.lcd._sprites = None
-+        self.lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++        self.lcd.show_icon(9, 7, 0, 0)
 +        self.assertEqual([op for op, _ in sent(self.lcd)], [0x23, 0x23])
++
++    def test_managed_library_without_sheets_draws_nothing(self):
++        self.lcd._sprites = None
++        self.lcd.show_icon(ICON_LIBRARY_ID, (7, 8), 0, 0)
++        self.assertEqual(sent(self.lcd), [])
++        with self.assertRaises(ValueError):
++            self.lcd.show_icon(ICON_LIBRARY_ID, (), 0, 0)
 +
 +    def test_animation_is_stepped_by_host_and_wraps(self):
 +        with patch('petrel.hardware.dwin.dacai.time.monotonic', return_value=100.0):
@@ -2912,10 +3006,22 @@ index 0000000..9319446
 +        self.assertEqual(sent(self.lcd), [])
 +        self.assertEqual(self.lcd._sprite_animations, {})
 +
-+    def test_animation_without_sheets_uses_panel_0x28(self):
++    def test_managed_animation_without_sheets_is_dropped(self):
++        self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
 +        self.lcd._sprites = None
 +        self.lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
-+        self.assertEqual([op for op, _ in sent(self.lcd)], [0x28])
++        self.assertNotIn(0x28, [op for op, _ in sent(self.lcd)])
++        self.assertEqual(self.lcd._sprite_animations, {})
++
++    def test_managed_animation_with_empty_range_never_uses_panel_0x28(self):
++        self.lcd.configure_animation(2, True, ICON_LIBRARY_ID, 8, 7, 0, 0, 10)
++        self.assertEqual(sent(self.lcd), [])
++
++    def test_other_library_animation_uses_panel_0x28_with_or_without_sheets(self):
++        self.lcd.configure_animation(1, True, 9, 7, 8, 0, 0, 10)
++        self.lcd._sprites = None
++        self.lcd.configure_animation(1, True, 9, 7, 8, 0, 0, 10)
++        self.assertEqual([op for op, _ in sent(self.lcd)], [0x28, 0x28])
 +
 +
 +class HostNfcReaderTests(unittest.TestCase):
@@ -3096,8 +3202,14 @@ index 0000000..9319446
 +        with patch('petrel.hardware.dwin.dacai.PANEL_ICONS', True):
 +            self.assertEqual(lcd._startup_animation_library(), ICON_LIBRARY_ID)
 +            lcd._startup_sync_icons()
-+        self.assertIsNone(lcd._sprites)
-+        self.assertEqual(sprites.parse_metadata(flash['raw']), [])
++            self.assertTrue(lcd._assets_synced)
++            self.assertIsNone(lcd._sprites)
++            self.assertEqual(sprites.parse_metadata(flash['raw']), [])
++            # The panel holds Petrel's library: native icons and animations.
++            lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++            lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
++        self.assertEqual([op for op, _ in sent(lcd)], [0x23, 0x28])
++        # Without the switch the same state stays silent (no sheets, no fallback).
 +        lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
 +        lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
 +        self.assertEqual([op for op, _ in sent(lcd)], [0x23, 0x28])
@@ -3106,7 +3218,7 @@ index 0000000..9319446
 +class DacaiConfigurationTests(unittest.TestCase):
 +    def test_kconfig_round_trip_and_baud_validation(self):
 +        from tools.configure import Configuration, collect, defaults, render_env, validate
-+        values = defaults(Path('/home/pi'))
++        values = defaults(Path(tempfile.gettempdir()).resolve())
 +        values.update(PETREL_DACAI='y', PETREL_DACAI_BAUD='460800')
 +        validate(values)
 +        self.assertEqual(collect(Configuration(ROOT, values))['PETREL_DACAI_BAUD'], '460800')
@@ -3119,7 +3231,7 @@ index 0000000..9319446
 +
 +    def test_dacai_and_auxiliary_uart_are_mutually_exclusive(self):
 +        from tools.configure import Configuration, collect, defaults, validate
-+        values = defaults(Path('/home/pi'))
++        values = defaults(Path(tempfile.gettempdir()).resolve())
 +        values.update(PETREL_DACAI='y', PETREL_AUX_UART='y')
 +        with self.assertRaisesRegex(ValueError, 'auxiliary UART'):
 +            validate(values)

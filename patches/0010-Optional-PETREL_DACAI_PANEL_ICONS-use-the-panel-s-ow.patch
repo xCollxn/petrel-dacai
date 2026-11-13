@@ -1,4 +1,4 @@
-From 90369dcc7429158bace8aab084ab55df40a07f82 Mon Sep 17 00:00:00 2001
+From 10558a2d8009a1c0eed1e33b0d90616341f75afb Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 01:43:16 +0100
 Subject: [PATCH 10/11] Optional PETREL_DACAI_PANEL_ICONS: use the panel's own
@@ -9,13 +9,13 @@ For a DACAI panel that already holds Petrel's icon library as icon/2.zico
 sprite sheets are uploaded, and the sprite checkpoint is cleared so that
 switching back uploads every sheet again.
 ---
- petrel/hardware/dwin/dacai.py | 28 +++++++++++++++++++++++++---
- tests/test_dacai_panel.py     | 17 +++++++++++++++++
- tools/dacai_artwork.py        | 10 ++++++++--
- 3 files changed, 50 insertions(+), 5 deletions(-)
+ petrel/hardware/dwin/dacai.py | 39 ++++++++++++++++++++++++++++++-----
+ tests/test_dacai_panel.py     | 23 +++++++++++++++++++++
+ tools/dacai_artwork.py        | 10 +++++++--
+ 3 files changed, 65 insertions(+), 7 deletions(-)
 
 diff --git a/petrel/hardware/dwin/dacai.py b/petrel/hardware/dwin/dacai.py
-index b16b1a6..afa41b2 100644
+index b0f8075..8f80c99 100644
 --- a/petrel/hardware/dwin/dacai.py
 +++ b/petrel/hardware/dwin/dacai.py
 @@ -35,6 +35,9 @@ UART_CLOCK = 15667200
@@ -28,7 +28,7 @@ index b16b1a6..afa41b2 100644
  
  
  class UnsupportedPanelFeature(RuntimeError):
-@@ -268,6 +271,8 @@ class DacaiDriver(T5UIC1Display):
+@@ -269,6 +272,8 @@ class DacaiDriver(T5UIC1Display):
      def _startup_animation_library(self):
          from petrel.artwork import sprites
          from petrel.artwork.resources import ICON_LIBRARY_ID
@@ -37,7 +37,7 @@ index b16b1a6..afa41b2 100644
          try:
              current = sprites.load()
              if sprites.resident(self, current):
-@@ -278,11 +283,28 @@ class DacaiDriver(T5UIC1Display):
+@@ -279,9 +284,29 @@ class DacaiDriver(T5UIC1Display):
          return None  # First install: draw the boot frame without icons.
  
      def _startup_sync_icons(self):
@@ -51,12 +51,13 @@ index b16b1a6..afa41b2 100644
 +            self._forget_sprites()
 +        else:
 +            self.sync_sprites()
-         self._assets_synced = True
- 
++
 +    def _forget_sprites(self):
 +        """Panel icon files in use: invalidate the sprite checkpoint, so switching
 +        back uploads every sheet again (the pictures may have been removed)."""
 +        from petrel.artwork import sprites
++        self._assets_synced = False
++        self._sprite_animations.clear()
 +        self._sprites = None
 +        raw = self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE)
 +        if sprites.parse_metadata(raw):
@@ -65,15 +66,31 @@ index b16b1a6..afa41b2 100644
 +            if self.read_flash(sprites.METADATA_ADDRESS, sprites.METADATA_SIZE) != blank:
 +                raise RuntimeError('Sprite metadata invalidation failed')
 +            logging.info('Panel icon files in use; sprite checkpoint cleared')
-+
++        self._assets_synced = True
+ 
      def sync_sprites(self, *, force=False):
          """Upload changed sheets; ``force`` repairs pictures removed by a microSD update.
+@@ -321,9 +346,13 @@ class DacaiDriver(T5UIC1Display):
  
+     @staticmethod
+     def _managed_library(library_id):
+-        """Petrel's own library: always drawn from the sprite sheets, never natively."""
++        """Petrel's own library: always drawn from the sprite sheets, never natively.
++
++        With PETREL_DACAI_PANEL_ICONS the panel's icon/2.zico holds Petrel's
++        library, so it is drawn with the native 0x23/0x28 like any other.
++        """
+         from petrel.artwork.resources import ICON_LIBRARY_ID
+-        return library_id == ICON_LIBRARY_ID
++        return not PANEL_ICONS and library_id == ICON_LIBRARY_ID
+ 
+     def _draw_sprites(self, icons, x, y, background):
+         """Copy icons from their sheets in a row; False if any icon is missing.
 diff --git a/tests/test_dacai_panel.py b/tests/test_dacai_panel.py
-index f4966e9..9319446 100644
+index 28ac472..c011467 100644
 --- a/tests/test_dacai_panel.py
 +++ b/tests/test_dacai_panel.py
-@@ -849,6 +849,23 @@ class OpaqueThumbnailTests(unittest.TestCase):
+@@ -905,6 +905,29 @@ class OpaqueThumbnailTests(unittest.TestCase):
          self.assertIsInstance(future, Future)
  
  
@@ -87,8 +104,14 @@ index f4966e9..9319446 100644
 +        with patch('petrel.hardware.dwin.dacai.PANEL_ICONS', True):
 +            self.assertEqual(lcd._startup_animation_library(), ICON_LIBRARY_ID)
 +            lcd._startup_sync_icons()
-+        self.assertIsNone(lcd._sprites)
-+        self.assertEqual(sprites.parse_metadata(flash['raw']), [])
++            self.assertTrue(lcd._assets_synced)
++            self.assertIsNone(lcd._sprites)
++            self.assertEqual(sprites.parse_metadata(flash['raw']), [])
++            # The panel holds Petrel's library: native icons and animations.
++            lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
++            lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
++        self.assertEqual([op for op, _ in sent(lcd)], [0x23, 0x28])
++        # Without the switch the same state stays silent (no sheets, no fallback).
 +        lcd.show_icon(ICON_LIBRARY_ID, 7, 0, 0)
 +        lcd.configure_animation(1, True, ICON_LIBRARY_ID, 7, 8, 0, 0, 10)
 +        self.assertEqual([op for op, _ in sent(lcd)], [0x23, 0x28])
