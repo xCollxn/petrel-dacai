@@ -11,7 +11,7 @@
 | | |
 |---|---|
 | 🛟 **Backup and rescue** | A byte-exact copy of the screen's 2 MB flash; a screen with corrupted firmware or file system can be restored |
-| 🎨 **Native icons and animations** | Your own icon library (`icon/2.zico`) on the screen, with the screen's own `0x28` animations (patch 0009, `PETREL_DACAI_PANEL_ICONS=1`) |
+| 🎨 **Native icons and animations** | Your own icon library (`icon/2.zico`) on the screen, with the screen's own `0x28` animations (patch 0010, `PETREL_DACAI_PANEL_ICONS=1`) |
 | 🧹 **Clean up** | Remove leftover pictures and files from the 1 MB file system that UART commands cannot delete |
 
 All of this works over the screen's **USB pins** and a microSD "FEL key". Only J3 needs three
@@ -153,7 +153,7 @@ written its copy over it: `repair` then refuses and asks you to `delete` that pi
 (Petrel uploads it again). After writing an image back, a fresh backup + `list` should report
 `file system consistent`.
 
-## 7. Native icons and animations (patch 0009)
+## 7. Native icons and animations (patch 0010)
 
 Petrel normally draws icons from sprite sheets it uploads itself. With your own icon library on
 the screen, Petrel can use the screen's icon files instead – your own artwork and the screen's

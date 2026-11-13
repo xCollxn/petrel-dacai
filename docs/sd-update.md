@@ -45,7 +45,7 @@ What gets replaced: `icon/2.zico` (Petrel icon library), `image/0.jpg` (boot ima
 7. The SD update removes the pictures Petrel uploaded. Upload them again, then start Petrel:
    `~/petrel-env/bin/python ~/Petrel/tools/dacai_artwork.py --serial-port /dev/ttyAMA0`.
    Petrel's sprite sheets take precedence over icons from the card; icons Petrel does not have
-   (e.g. 186–188 of patch 0006) still come from the card.
+   (e.g. 186–188 of patch 0008) still come from the card.
 
 ## Screen firmware update (`firmware.zlib`)
 

@@ -35,7 +35,7 @@ git clone https://github.com/sezgynus/Petrel.git ~/Petrel
 cd ~/Petrel
 git checkout -b dacai 764d40684ee8485a7d00ffb9df9fc0add77b79c1
 git -c user.name=me -c user.email=me@localhost am ~/petrel-dacai/patches/00*.patch
-git log --oneline | head -11         # ten commits on top (DWIN driver / DacaiDriver / configure.sh / thumbnails / Optional / Maintenance)
+git log --oneline | head -12         # eleven commits on top (DWIN driver / DacaiDriver / configure.sh / thumbnails / review / Optional / Maintenance)
 git status --short                   # must be empty (the installer requires a clean tree)
 ```
 
@@ -59,7 +59,7 @@ cd ~/Petrel && bash install.sh       # install.sh is not executable in the repo,
 
 It installs packages (sudo), creates `Petrel.service`, adds `[include Petrel.conf]` to
 `moonraker.conf` and restarts Moonraker. Petrel starts right away and uploads the boot picture,
-shared artwork and six icon sprite sheets over the UART (about 15 s at 460800 baud). No SD card
+shared artwork and eight icon sprite sheets over the UART (about 20 s at 460800 baud). No SD card
 is needed.
 
 ## 6. ★ Optional: SD overlay

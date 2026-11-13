@@ -64,7 +64,7 @@ Andere DACAI-Drucker sollten sich gleich verhalten – Rückmeldungen willkommen
 * Die komplette Petrel-Oberfläche am Original-Display: Drucken mit **Vorschaubild**, Tune,
   Prepare, Leveling (Bed Mesh, Schrauben, Z-Offset), Wartungserinnerungen, Info.
 * **Keine SD-Karte nötig:** Startbild, gemeinsame Grafik und alle Icons werden beim ersten
-  Start über das Kabel hochgeladen (etwa 15 s), danach nur noch Geändertes. Icon-Animationen
+  Start über das Kabel hochgeladen (etwa 20 s bei 460800 Baud), danach nur noch Geändertes. Icon-Animationen
   (Startfortschritt, Lüfter) steuert der Pi.
 * ★ Mit SD-Paket: gefüllte Farb-Icons und eine klarere fette Schrift (DejaVu Sans Mono).
 * Display wird **dunkel, solange der Drucker aus ist**, und geht an, sobald Klipper bereit ist
@@ -87,7 +87,7 @@ Ausführlich: [`docs/install.md`](docs/install.md) · Verkabelung: [`docs/wiring
    ```
 4. [`examples/Petrel.env`](examples/Petrel.env) nach `~/.config/Petrel/Petrel.env` kopieren (setzt `PETREL_DACAI=1`).
 5. `cd ~/Petrel && bash install.sh` – beim ersten Start lädt Petrel Grafiken und Icon-Blätter
-   über das Kabel hoch (etwa 15 s), fertig.
+   über das Kabel hoch (etwa 20 s bei 460800 Baud), fertig.
 6. ★ Optional: eigene Schrift / neu gezeichnete Icons per SD-Paket: [`docs/sd-update.md`](docs/sd-update.md).
 
 ## Welches „Firmware-Update“ ist was?
@@ -109,10 +109,10 @@ Für die Grundfunktion brauchst du nur Pi, Display und Kabel. Alles mit ★ ist 
 | ★ Add-on | Du brauchst | Was es macht |
 |---|---|---|
 | **Autostart über Home Assistant** | Home Assistant, die Moonraker-Integration und eine Steckdose, die den Strom **misst** | Drucker einschalten → Home Assistant schickt `FIRMWARE_RESTART` → nach ~20 s bereit. Ohne Add-on: `FIRMWARE_RESTART` wie gewohnt in Mainsail/Fluidd. → [`examples/home-assistant/`](examples/home-assistant/) |
-| **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann `PETREL_BOOT_ARTWORK=/pfad/mein_boot.jpg` (Patch 0008) – geht über das Kabel |
+| **Eigenes Startbild** | nichts extra | `tools/make_boot.py --title "Mein Drucker" mein_boot.jpg`, dann `PETREL_BOOT_ARTWORK=/pfad/mein_boot.jpg` (Patch 0009) – geht über das Kabel |
 | **Eigene Schrift / neu gezeichnete Icons** | SD-Karte, Python mit Pillow (+ fonttools) | SD-Paket, siehe [`docs/sd-update.md`](docs/sd-update.md) |
-| **FEL-Zugang** | Lötkolben, altes USB-Kabel, freie microSD-Karte | Drei Lötstellen an J3: Sicherung des ganzen Display-Speichers, Rettung, eigene Icons mit nativen Animationen (Patch 0009), Aufräumen → [`docs/fel.md`](docs/fel.md) |
-| **Vorschaubilder in der Dateiliste** | nichts extra | Patch 0010, `PETREL_FILE_THUMBNAILS=1` |
+| **FEL-Zugang** | Lötkolben, altes USB-Kabel, freie microSD-Karte | Drei Lötstellen an J3: Sicherung des ganzen Display-Speichers, Rettung, eigene Icons mit nativen Animationen (Patch 0010), Aufräumen → [`docs/fel.md`](docs/fel.md) |
+| **Vorschaubilder in der Dateiliste** | nichts extra | Patch 0011, `PETREL_FILE_THUMBNAILS=1` |
 
 Das Dunkelschalten des Displays bei ausgeschaltetem Drucker braucht **keinen** Strommesser – Petrel erkennt das direkt an Klipper.
 

@@ -109,7 +109,7 @@ re-initialises UART 2). The new speed stays until the panel loses power.
 Floods of 3000 rectangles or several full menu screens at 460800/921600 were processed without loss;
 the panel needs ~0.3 s per full menu screen to draw, so the gain is mostly for SRAM/picture uploads.
 Send `0x38`, switch the host port, then handshake. A host that restarts must probe both speeds
-(the panel keeps the raised one) – patch 0008 does that.
+(the panel keeps the raised one) – patches 0002/0005 try every host speed.
 
 ## Opcodes handled by the firmware
 

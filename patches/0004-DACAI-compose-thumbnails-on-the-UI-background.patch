@@ -1,7 +1,7 @@
 From 855ddc961b12424bac65372a8f5702abf29ce0dc Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 02:12:31 +0100
-Subject: [PATCH 04/10] DACAI: compose thumbnails on the UI background
+Subject: [PATCH 04/11] DACAI: compose thumbnails on the UI background
 
 0x70 draws SRAM JPEGs opaque, so the black backing that 0x24 filters away on
 DWIN stayed visible as a black square around every print preview. On DACAI,

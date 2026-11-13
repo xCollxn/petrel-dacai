@@ -1,7 +1,7 @@
-From d7906134ed5d6d095f521b65325b75a0a4c22396 Mon Sep 17 00:00:00 2001
+From 90369dcc7429158bace8aab084ab55df40a07f82 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 01:43:16 +0100
-Subject: [PATCH 09/10] Optional PETREL_DACAI_PANEL_ICONS: use the panel's own
+Subject: [PATCH 10/11] Optional PETREL_DACAI_PANEL_ICONS: use the panel's own
  icon files
 
 For a DACAI panel that already holds Petrel's icon library as icon/2.zico
@@ -9,15 +9,16 @@ For a DACAI panel that already holds Petrel's icon library as icon/2.zico
 sprite sheets are uploaded, and the sprite checkpoint is cleared so that
 switching back uploads every sheet again.
 ---
- petrel/hardware/dwin/dacai.py | 23 ++++++++++++++++++++++-
+ petrel/hardware/dwin/dacai.py | 28 +++++++++++++++++++++++++---
  tests/test_dacai_panel.py     | 17 +++++++++++++++++
- 2 files changed, 39 insertions(+), 1 deletion(-)
+ tools/dacai_artwork.py        | 10 ++++++++--
+ 3 files changed, 50 insertions(+), 5 deletions(-)
 
 diff --git a/petrel/hardware/dwin/dacai.py b/petrel/hardware/dwin/dacai.py
-index 64d8dc7..85e2bdd 100644
+index b16b1a6..afa41b2 100644
 --- a/petrel/hardware/dwin/dacai.py
 +++ b/petrel/hardware/dwin/dacai.py
-@@ -29,6 +29,9 @@ UART_CLOCK = 15667200
+@@ -35,6 +35,9 @@ UART_CLOCK = 15667200
  DEFAULT_BAUD = 115200
  HOST_BAUDS = (115200, 230400, 460800, 921600)
  PICTURE_SIZE = 0x8000
@@ -26,8 +27,8 @@ index 64d8dc7..85e2bdd 100644
 +PANEL_ICONS = os.environ.get('PETREL_DACAI_PANEL_ICONS') == '1'
  
  
- def enabled():
-@@ -152,6 +155,8 @@ class DacaiDriver(T5UIC1Display):
+ class UnsupportedPanelFeature(RuntimeError):
+@@ -268,6 +271,8 @@ class DacaiDriver(T5UIC1Display):
      def _startup_animation_library(self):
          from petrel.artwork import sprites
          from petrel.artwork.resources import ICON_LIBRARY_ID
@@ -36,11 +37,16 @@ index 64d8dc7..85e2bdd 100644
          try:
              current = sprites.load()
              if sprites.resident(self, current):
-@@ -162,9 +167,25 @@ class DacaiDriver(T5UIC1Display):
+@@ -278,11 +283,28 @@ class DacaiDriver(T5UIC1Display):
          return None  # First install: draw the boot frame without icons.
  
      def _startup_sync_icons(self):
+-        # Failures propagate like the DWIN icon-library sync: the panel's own
+-        # icon files are not Petrel's, so there is no silent fallback.
 -        self.sync_sprites()
++        # Failures propagate like the DWIN icon-library sync: without
++        # PETREL_DACAI_PANEL_ICONS the panel's own icon files are not Petrel's,
++        # so there is no silent fallback.
 +        if PANEL_ICONS:
 +            self._forget_sprites()
 +        else:
@@ -61,14 +67,14 @@ index 64d8dc7..85e2bdd 100644
 +            logging.info('Panel icon files in use; sprite checkpoint cleared')
 +
      def sync_sprites(self, *, force=False):
-         """Upload changed sheets; ``force`` repairs pictures removed by a microSD update."""
-         from petrel.artwork import sprites
+         """Upload changed sheets; ``force`` repairs pictures removed by a microSD update.
+ 
 diff --git a/tests/test_dacai_panel.py b/tests/test_dacai_panel.py
-index b98ae31..aa2f01d 100644
+index f4966e9..9319446 100644
 --- a/tests/test_dacai_panel.py
 +++ b/tests/test_dacai_panel.py
-@@ -337,6 +337,23 @@ class OpaqueThumbnailTests(unittest.TestCase):
-         self.assertGreater(max(centre_edge), 30)
+@@ -849,6 +849,23 @@ class OpaqueThumbnailTests(unittest.TestCase):
+         self.assertIsInstance(future, Future)
  
  
 +class PanelIconTests(unittest.TestCase):
@@ -91,6 +97,32 @@ index b98ae31..aa2f01d 100644
  class DacaiConfigurationTests(unittest.TestCase):
      def test_kconfig_round_trip_and_baud_validation(self):
          from tools.configure import Configuration, collect, defaults, render_env, validate
+diff --git a/tools/dacai_artwork.py b/tools/dacai_artwork.py
+index 1d6a2ea..0b0e7f6 100755
+--- a/tools/dacai_artwork.py
++++ b/tools/dacai_artwork.py
+@@ -26,13 +26,19 @@ def main(argv=None):
+     args = parser.parse_args(argv)
+     logging.basicConfig(level=logging.INFO, format='%(message)s')
+     from petrel.artwork import boot, shared
++    from petrel.hardware.dwin import dacai
+     from petrel.hardware.dwin.dacai import DacaiDriver
+     lcd = DacaiDriver(args.serial_port)
+     try:
+         boot.sync(lcd, force=True)
+         shared.sync(lcd, force=True)
+-        lcd.sync_sprites(force=True)
+-        uploaded = lcd._sprites is not None
++        if dacai.PANEL_ICONS:
++            # Icons come from the panel's own icon/2.zico; sheets would only use space.
++            print('PETREL_DACAI_PANEL_ICONS=1: icon sprite sheets skipped.')
++            uploaded = True
++        else:
++            lcd.sync_sprites(force=True)
++            uploaded = lcd._sprites is not None
+         lcd.show_jpeg(0)
+         lcd.update()
+     finally:
 -- 
 2.47.3
 

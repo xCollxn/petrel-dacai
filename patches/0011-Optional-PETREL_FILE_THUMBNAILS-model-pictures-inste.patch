@@ -1,7 +1,7 @@
-From 2cb355a2716717d966f4cca12ec45df438d62d4f Mon Sep 17 00:00:00 2001
+From 36437db45e3417c7abed265b4e222a873af5cdb4 Mon Sep 17 00:00:00 2001
 From: xCollxn <81695022+xCollxn@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 01:54:26 +0100
-Subject: [PATCH 10/10] Optional PETREL_FILE_THUMBNAILS: model pictures instead
+Subject: [PATCH 11/11] Optional PETREL_FILE_THUMBNAILS: model pictures instead
  of file icons in the file list
 
 Visible file rows get a 32x32 version of the G-code thumbnail, loaded in the
@@ -42,7 +42,7 @@ index c7f04c1..93f7cd4 100644
          directory = getattr(self, '_file_directory', '')
          self._draw_list_menu(('Print: /' + directory)[-32:] if directory else 'Print file',
 diff --git a/petrel/features/files/preview.py b/petrel/features/files/preview.py
-index b6b5ba2..eb28c55 100644
+index 7b753d1..01dcc5b 100644
 --- a/petrel/features/files/preview.py
 +++ b/petrel/features/files/preview.py
 @@ -3,6 +3,11 @@ import logging
@@ -57,7 +57,7 @@ index b6b5ba2..eb28c55 100644
  from petrel.features.files.metadata import PreviewDetails, amount, duration, filament_length
  
  
-@@ -32,6 +37,7 @@ class FilePreviewMixin:
+@@ -35,6 +40,7 @@ class FilePreviewMixin:
          stamp = (getattr(self, '_uart_epoch', 0), self.pd.state.epoch, revision,
                   self.pd.file_sort_revision, id(self.pd.files), getattr(self, '_file_paths', ()),
                   getattr(self, '_preview_cache_key', None), getattr(self.pd, '_files_generation', 0),
@@ -65,7 +65,7 @@ index b6b5ba2..eb28c55 100644
                   self.pd.file_name if self.pd.status in ('printing','paused','pausing','complete','cancelled') else None)
          if stamp == getattr(self, '_thumbnail_stamp', None):
              return
-@@ -53,10 +59,12 @@ class FilePreviewMixin:
+@@ -56,10 +62,12 @@ class FilePreviewMixin:
                  for item in self.pd.files}
          priority = tuple(islice((self._thumbnail_keys[path] for path in getattr(self, '_file_paths', ())
                           if path in self._thumbnail_keys and not path.endswith('/')), 5))
@@ -79,7 +79,7 @@ index b6b5ba2..eb28c55 100644
          valid.extend(priority)
          preview = getattr(self, '_preview_cache_key', None)
          if preview is not None and self._thumbnail_keys.get(preview[0]) == preview:
-@@ -69,9 +77,32 @@ class FilePreviewMixin:
+@@ -72,9 +80,32 @@ class FilePreviewMixin:
                                      getattr(self.pd, '_files_generation', 0)),
                                     valid, priority)
  
@@ -113,10 +113,10 @@ index b6b5ba2..eb28c55 100644
      def _open_file_preview(self, path):
          self._sync_thumbnail_cache()
 diff --git a/petrel/features/files/thumbnail_cache.py b/petrel/features/files/thumbnail_cache.py
-index 747d3d8..009a3e3 100644
+index 8939676..81e871b 100644
 --- a/petrel/features/files/thumbnail_cache.py
 +++ b/petrel/features/files/thumbnail_cache.py
-@@ -46,7 +46,8 @@ class ThumbnailCache:
+@@ -49,7 +49,8 @@ class ThumbnailCache:
              self.retry_at.clear()
              self.upload = None
          self.valid = set(valid)
@@ -127,10 +127,10 @@ index 747d3d8..009a3e3 100644
              self.errors = {key: value for key, value in self.errors.items() if value != 'LCD cache full'}
          self.priority = priority
 diff --git a/petrel/features/files/thumbnail_preview.py b/petrel/features/files/thumbnail_preview.py
-index 1a42eae..5cac18f 100644
+index 5cca384..16add42 100644
 --- a/petrel/features/files/thumbnail_preview.py
 +++ b/petrel/features/files/thumbnail_preview.py
-@@ -8,6 +8,8 @@ from PIL import Image
+@@ -8,6 +8,8 @@ from PIL import Image, ImageChops
  from petrel.features.files.metadata import PreviewData, details_from_metadata
  
  MIN_FOREGROUND_LUMA = 48
@@ -139,10 +139,10 @@ index 1a42eae..5cac18f 100644
  MAX_CANDIDATES = 4
  
  
-@@ -60,7 +62,7 @@ def _opaque_canvas(size):
- 
- def image_jpeg(data, size=128):
-     """Reserve black backing for filtered drawing, protecting dark model details."""
+@@ -67,7 +69,7 @@ def image_jpeg(data, size=128, *, opaque=False):
+     ``opaque`` (the panel's OPAQUE_SRAM_JPEG) composes the thumbnail on the UI
+     background instead, for panels that cannot filter black.
+     """
 -    if size not in (88, 128):
 +    if size not in (LIST_SIZE, 88, 128):
          raise ValueError('Unsupported panel thumbnail size')
